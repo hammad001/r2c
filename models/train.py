@@ -60,7 +60,7 @@ parser.add_argument(
 args = parser.parse_args()
 
 params = Params.from_file(args.params)
-train, val, test = VCR.splits(embs_to_load=params['dataset_reader'].get('embs', 'bert_da'),
+train, val = VCR.splits(embs_to_load=params['dataset_reader'].get('embs', 'bert_da'),
                               only_use_relevant_dets=params['dataset_reader'].get('only_use_relevant_dets', True))
 NUM_GPUS = torch.cuda.device_count()
 NUM_CPUS = multiprocessing.cpu_count()
@@ -80,7 +80,6 @@ print(f"Using {num_workers} workers out of {NUM_CPUS} possible", flush=True)
 loader_params = {'batch_size': 96 // NUM_GPUS, 'num_gpus':NUM_GPUS, 'num_workers':num_workers}
 train_loader = VCRLoader.from_dataset(train, **loader_params)
 val_loader = VCRLoader.from_dataset(val, **loader_params)
-test_loader = VCRLoader.from_dataset(test, **loader_params)
 
 ARGS_RESET_EVERY = 100
 print("Loading {} for {}".format(params['model'].get('type', 'WTF?'), 'rationales' if args.rationale else 'answer'), flush=True)
