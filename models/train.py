@@ -60,8 +60,7 @@ parser.add_argument(
 args = parser.parse_args()
 
 params = Params.from_file(args.params)
-train, val, test = VCR.splits(mode='rationale' if args.rationale else 'answer',
-                              embs_to_load=params['dataset_reader'].get('embs', 'bert_da'),
+train, val, test = VCR.splits(embs_to_load=params['dataset_reader'].get('embs', 'bert_da'),
                               only_use_relevant_dets=params['dataset_reader'].get('only_use_relevant_dets', True))
 NUM_GPUS = torch.cuda.device_count()
 NUM_CPUS = multiprocessing.cpu_count()

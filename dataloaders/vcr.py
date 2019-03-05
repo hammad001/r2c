@@ -148,8 +148,7 @@ class VCR(Dataset):
     def splits(cls, **kwargs):
         """ Helper method to generate splits of the dataset"""
         kwargs_copy = {x: y for x, y in kwargs.items()}
-        if 'mode' not in kwargs:
-            kwargs_copy['mode'] = 'answer'
+        
         train = cls(split='train', **kwargs_copy)
         val = cls(split='val', **kwargs_copy)
         test = cls(split='test', **kwargs_copy)
