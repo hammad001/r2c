@@ -110,6 +110,7 @@ class AttentionQA(Model):
         return self.span_encoder(span_rep, span_mask), retrieved_feats
 
     def forward(self,
+                cal_loss: bool
                 images: torch.Tensor,
                 objects: torch.LongTensor,
                 segms: torch.Tensor,
@@ -205,7 +206,7 @@ class AttentionQA(Model):
                        # 'qa_attention_weights': qa_attention_weights,
                        # 'atoo_attention_weights': atoo_attention_weights,
                        }
-        if label is not None:
+        if label is not None and cal_loss:
             loss = self._loss(logits, label.long().view(-1))
             self._accuracy(logits, label)
             output_dict["loss"] = loss[None]
