@@ -92,7 +92,7 @@ val_loader_ra_3 = VCRLoader.from_dataset(val[4], **loader_params)
 
 ARGS_RESET_EVERY = 100
 print("Loading {} ".format(params['model'].get('type', 'WTF?')), flush=True)
-model = Model.from_params(vocab=train.vocab, params=params['model'])
+model = Model.from_params(vocab=train[0].vocab, params=params['model'])
 for submodule in model.detector.backbone.modules():
     if isinstance(submodule, BatchNorm2d):
         submodule.track_running_stats = False
@@ -141,10 +141,33 @@ num_batches = 0
 for epoch_num in range(start_epoch, params['trainer']['num_epochs'] + start_epoch):
     train_results = []
     norms = []
+    train_loader_ra_0_iter = iter(train_loader_ra_0)
+    train_loader_ra_0_iter = iter(train_loader_ra_0)
+    train_loader_ra_0_iter = iter(train_loader_ra_0)
+    train_loader_ra_0_iter = iter(train_loader_ra_0)
+
     model.train()
     for b, (time_per_batch, batch_qa) in enumerate(time_batch(train_loader_qa if args.no_tqdm else tqdm(train_loader_qa), reset_every=ARGS_RESET_EVERY)):
+        
         batch_qa = _to_gpu(batch_qa)
-        batch_ra_0, batch_ra_1, batch_ra_2, batch_ra_3 = get_rationale_batches(num_batches, True)
+        try:
+            batch_ra_0 = train_loader_ra_0_iter.next()
+            batch_ra_1 = train_loader_ra_1_iter.next()
+            batch_ra_2 = train_loader_ra_2_iter.next()
+            batch_ra_3 = train_loader_ra_3_iter.next()
+        except StopIteration:
+            train_loader_ra_0_iter = iter(train_loader_ra_0)
+            train_loader_ra_0_iter = iter(train_loader_ra_0)
+            train_loader_ra_0_iter = iter(train_loader_ra_0)
+            train_loader_ra_0_iter = iter(train_loader_ra_0)
+            
+            batch_ra_0 = train_loader_ra_0_iter.next()
+            batch_ra_1 = train_loader_ra_1_iter.next()
+            batch_ra_2 = train_loader_ra_2_iter.next()
+            batch_ra_3 = train_loader_ra_3_iter.next()
+
+        batch_ra_0, batch_ra_1, batch_ra_2, batch_ra_3 = _to_gpu(batch_ra_0), _to_gpu(batch_ra_1), _to_gpu(batch_ra_2), _to_gpu(batch_ra_3)
+
         optimizer.zero_grad()
         
         output_dict_qa = model(True, **batch_qa)
@@ -244,9 +267,9 @@ for epoch_num in range(start_epoch, params['trainer']['num_epochs'] + start_epoc
             loss_ra = criterion_ra(out_logits_ra, ra_label).mean().item() * batch_qa['label'].shape[0]
             val_loss_ra_sum += loss_ra
 
-            val_loss_qra_sum += (4/20)loss_qa + (16/20)loss_ra
+            val_loss_qra_sum += (4/20) * loss_qa + (16/20) * loss_ra
             
-                        val_probs_qa.append(output_dict_qa['label_probs'].detach().cpu().numpy())
+            val_probs_qa.append(output_dict_qa['label_probs'].detach().cpu().numpy())
             val_probs_ra.append(F.softmax(out_logits_ra).detach().cpu().numpy())
             val_labels_qa.append(qa_label.detach().cpu().numpy())
             val_labels_ra.append(ra_label.detach().cpu().numpy())

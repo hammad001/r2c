@@ -110,7 +110,7 @@ class AttentionQA(Model):
         return self.span_encoder(span_rep, span_mask), retrieved_feats
 
     def forward(self,
-                cal_loss: bool
+                cal_loss: bool,
                 images: torch.Tensor,
                 objects: torch.LongTensor,
                 segms: torch.Tensor,
