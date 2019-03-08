@@ -25,54 +25,6 @@ class InputFeatures(object):
         self.is_correct = is_correct
 
 
-def input_fn_builder(features, seq_length):
-    """Creates an `input_fn` closure to be passed to TPUEstimator."""
-
-    all_unique_ids = []
-    all_input_ids = []
-    all_input_mask = []
-    all_input_type_ids = []
-
-    for feature in features:
-        all_unique_ids.append(feature.unique_id)
-        all_input_ids.append(feature.input_ids)
-        all_input_mask.append(feature.input_mask)
-        all_input_type_ids.append(feature.input_type_ids)
-
-    def input_fn(params):
-        """The actual input function."""
-        batch_size = params["batch_size"]
-
-        num_examples = len(features)
-
-        # This is for demo purposes and does NOT scale to large data sets. We do
-        # not use Dataset.from_generator() because that uses tf.py_func which is
-        # not TPU compatible. The right way to load data is with TFRecordReader.
-        d = tf.data.Dataset.from_tensor_slices({
-            "unique_ids":
-                tf.constant(all_unique_ids, shape=[num_examples], dtype=tf.int32),
-            "input_ids":
-                tf.constant(
-                    all_input_ids, shape=[num_examples, seq_length],
-                    dtype=tf.int32),
-            "input_mask":
-                tf.constant(
-                    all_input_mask,
-                    shape=[num_examples, seq_length],
-                    dtype=tf.int32),
-            "input_type_ids":
-                tf.constant(
-                    all_input_type_ids,
-                    shape=[num_examples, seq_length],
-                    dtype=tf.int32),
-        })
-
-        d = d.batch(batch_size=batch_size, drop_remainder=False)
-        return d
-
-    return input_fn
-
-
 GENDER_NEUTRAL_NAMES = ['Casey', 'Riley', 'Jessie', 'Jackie', 'Avery', 'Jaime', 'Peyton', 'Kerry', 'Jody', 'Kendall',
                         'Peyton', 'Skyler', 'Frankie', 'Pat', 'Quinn',
                         ]
@@ -265,16 +217,23 @@ def data_iter(data_fn, tokenizer, max_seq_length, endingonly):
         for line_no, line in enumerate(tqdm(f)):
             item = json.loads(line)
             q_tokens, a_tokens = fix_item(item, rationales=False)
-            qa_tokens, r_tokens = fix_item(item, answer_label=item['answer_label'], rationales=True)
 
-            for (name, ctx, answers) in (('qa', q_tokens, a_tokens), ('qar', qa_tokens, r_tokens)):
-                for i in range(4):
-                    is_correct = item['answer_label' if name == 'qa' else 'rationale_label'] == i
+            for i in range(4):
+                is_correct = item['answer_label'] == i
 
-                    yield process_ctx_ans_for_bert(ctx, answers[i], tokenizer, counter=counter, endingonly=endingonly,
+                yield process_ctx_ans_for_bert(q_tokens, a_tokens[i], tokenizer, counter=counter, endingonly=endingonly,
+                                               max_seq_length=max_seq_length, is_correct=is_correct)
+                counter += 1
+            
+            for i in range(4):
+                qa_tokens, r_tokens = fix_item(item, answer_label=i, rationales=True)
+                is_correct = item['answer_label'] == i
+                
+                for r_token in r_tokens:
+                    yield process_ctx_ans_for_bert(qa_tokens, r_token, tokenizer, counter=counter,
+                                                   endingonly=endingonly,
                                                    max_seq_length=max_seq_length, is_correct=is_correct)
                     counter += 1
-
 
 def data_iter_test(data_fn, tokenizer, max_seq_length, endingonly):
     """ Essentially this needs to be a bit separate from data_iter because we don't know which answer is correct."""

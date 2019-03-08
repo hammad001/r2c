@@ -56,7 +56,7 @@ mypath = os.getcwd()
 vocab_file = os.path.join(mypath, 'vocab.txt')
 assert os.path.exists(vocab_file)
 
-output_file = f'pretrainingdata.tfrecord'
+output_file = 'pretrainingdata.tfrecord'
 
 class TrainingInstance(object):
     """A single training instance (sentence pair)."""
@@ -172,7 +172,7 @@ def create_float_feature(values):
 def create_training_instances(tokenizer, rng):
     print("Iterating through the data", flush=True)
     input_examples = []
-    for x in data_iter(f'../{FLAGS.split}.jsonl', tokenizer=tokenizer, max_seq_length=FLAGS.max_seq_length,
+    for x in data_iter('../{}.jsonl'.format(FLAGS.split), tokenizer=tokenizer, max_seq_length=FLAGS.max_seq_length,
                                 endingonly=False):
         input_examples.append(x[0])
 

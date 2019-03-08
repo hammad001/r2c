@@ -28,7 +28,7 @@ from data.get_bert_embeddings import tokenization
 import tensorflow as tf
 import h5py
 from tqdm import tqdm
-from data.get_bert_embeddings.vcr_loader import data_iter, data_iter_test, convert_examples_to_features, input_fn_builder
+from data.get_bert_embeddings.vcr_loader import data_iter, data_iter_test, convert_examples_to_features 
 
 flags = tf.flags
 
@@ -55,7 +55,7 @@ flags.DEFINE_bool(
     "Whether to lower case the input text. Should be True for uncased "
     "models and False for cased models.")
 
-flags.DEFINE_integer("batch_size", 32, "Batch size for predictions.")
+flags.DEFINE_integer("batch_size", 8, "Batch size for predictions.")
 
 flags.DEFINE_bool("use_tpu", False, "Whether to use TPU or GPU/CPU.")
 
@@ -92,6 +92,72 @@ bert_config_file = os.path.join(mypath, 'uncased_L-12_H-768_A-12', 'bert_config.
 vocab_file = os.path.join(mypath, 'uncased_L-12_H-768_A-12', 'vocab.txt')
 # init_checkpoint = os.path.join(mypath, 'uncased_L-12_H-768_A-12', 'bert_model.ckpt')
 bert_config = modeling.BertConfig.from_json_file(bert_config_file)
+
+class IteratorInitializerHook(tf.train.SessionRunHook):
+    """Hook to initialise data iterator after Session is created."""
+
+    def __init__(self):
+        super(IteratorInitializerHook, self).__init__()
+        self.__init__iterator_initializer_func = None
+
+    def after_create_session(self, session, coord):
+        """Initialise the iterator after the session has been created."""
+        self.iterator_initializer_func(session)
+
+def input_fn_builder(features, seq_length):
+    """Creates an `input_fn` closure to be passed to TPUEstimator."""
+
+    iterator_initializer_hook = IteratorInitializerHook()
+    
+    num_examples = len(features)
+
+    all_unique_ids = []
+    all_input_ids = []
+    all_input_mask = []
+    all_input_type_ids = []
+
+    for feature in features:
+        all_unique_ids.append(feature.unique_id)
+        all_input_ids.append(feature.input_ids)
+        all_input_mask.append(feature.input_mask)
+        all_input_type_ids.append(feature.input_type_ids)
+
+
+    def input_fn(params):
+        """The actual input function."""
+        batch_size = params["batch_size"]
+
+        # This is for demo purposes and does NOT scale to large data sets. We do
+        # not use Dataset.from_generator() because that uses tf.py_func which is
+        # not TPU compatible. The right way to load data is with TFRecordReader.
+        
+        unique_ids_placeholder = tf.placeholder(tf.int32, [num_examples])
+        input_ids_placeholder = tf.placeholder(tf.int32, [num_examples, seq_length])
+        input_mask_placeholder = tf.placeholder(tf.int32, [num_examples, seq_length])
+        input_type_ids_placeholder = tf.placeholder(tf.int32, [num_examples, seq_length])
+
+
+        d = tf.data.Dataset.from_tensor_slices({
+            "unique_ids": unique_ids_placeholder,
+            "input_ids": input_ids_placeholder,
+            "input_mask": input_mask_placeholder,
+            "input_type_ids": input_type_ids_placeholder
+        })
+
+        d = d.batch(batch_size=batch_size, drop_remainder=False)
+        
+        feed_dict_d = {unique_ids_placeholder:all_unique_ids, input_ids_placeholder: all_input_ids,
+                 input_mask_placeholder: all_input_mask, input_type_ids_placeholder: all_input_type_ids}
+
+        iterator = d.make_initializable_iterator()
+        feats = iterator.get_next()
+
+        iterator_initializer_hook.iterator_initializer_func = lambda sess: sess.run(iterator.initializer,
+                                                                feed_dict=feed_dict_d)
+
+        return feats
+
+    return input_fn, iterator_initializer_hook
 
 
 def model_fn_builder(bert_config, init_checkpoint, layer_indexes, use_tpu,
@@ -173,7 +239,7 @@ tokenizer = tokenization.FullTokenizer(
 ########################################
 
 data_iter_ = data_iter if FLAGS.split != 'test' else data_iter_test
-examples = [x for x in data_iter_(f'../{FLAGS.split}.jsonl',
+examples = [x for x in data_iter_('../{}.jsonl'.format(FLAGS.split),
                                  tokenizer=tokenizer,
                                  max_seq_length=FLAGS.max_seq_length,
                                  endingonly=FLAGS.endingonly)]
@@ -206,33 +272,24 @@ estimator = tf.contrib.tpu.TPUEstimator(
     config=run_config,
     predict_batch_size=FLAGS.batch_size)
 
-input_fn = input_fn_builder(
+input_fn, input_init_hook = input_fn_builder(
     features=features, seq_length=FLAGS.max_seq_length)
 
-output_h5_qa = h5py.File(f'../{FLAGS.name}_answer_{FLAGS.split}.h5', 'w')
-output_h5_qar = h5py.File(f'../{FLAGS.name}_rationale_{FLAGS.split}.h5', 'w')
+def feed_fn():
+    return feed_dict
 
-if FLAGS.split != 'test':
-    subgroup_names = [
-        'answer0',
-        'answer1',
-        'answer2',
-        'answer3',
-        'rationale0',
-        'rationale1',
-        'rationale2',
-        'rationale3',
-    ]
-else:
-    subgroup_names = [
-        'answer0',
-        'answer1',
-        'answer2',
-        'answer3'] + [f'rationale{x}{y}' for x in range(4) for y in range(4)]
+output_h5_qa = h5py.File('../{}_answer_{}.h5'.format(FLAGS.name, FLAGS.split), 'w')
+output_h5_qar = h5py.File('../{}_rationale_{}.h5'.format(FLAGS.name, FLAGS.split), 'w')
+
+subgroup_names = [
+    'answer0',
+    'answer1',
+    'answer2',
+    'answer3'] + ['rationale{}{}'.format(x, y) for x in range(4) for y in range(4)]
 
 for i in range(len(examples) // len(subgroup_names)):
-    output_h5_qa.create_group(f'{i}')
-    output_h5_qar.create_group(f'{i}')
+    output_h5_qa.create_group('{}'.format(i))
+    output_h5_qar.create_group('{}'.format(i))
 
 
 def alignment_gather(alignment, layer):
@@ -254,7 +311,10 @@ def alignment_gather(alignment, layer):
     return output_embs
 
 
-for result in tqdm(estimator.predict(input_fn, yield_single_examples=True)):
+for result in tqdm(estimator.predict(input_fn, 
+                   hooks=[input_init_hook],
+                   yield_single_examples=True)):
+
     ind = unique_id_to_ind[int(result["unique_id"])]
 
     text, ctx_alignment, choice_alignment = examples[ind]
@@ -263,13 +323,13 @@ for result in tqdm(estimator.predict(input_fn, yield_single_examples=True)):
     ex2use = ind//len(subgroup_names)
     subgroup_name = subgroup_names[ind % len(subgroup_names)]
 
-    group2use = (output_h5_qa if subgroup_name.startswith('answer') else output_h5_qar)[f'{ex2use}']
+    group2use = (output_h5_qa if subgroup_name.startswith('answer') else output_h5_qar)['{}'.format(ex2use)]
     alignment_ctx = [-1] + ctx_alignment
 
     if FLAGS.endingonly:
         # just a single span here
-        group2use.create_dataset(f'answer_{subgroup_name}', data=alignment_gather(alignment_ctx, layer))
+        group2use.create_dataset('answer_{}'.format(subgroup_name), data=alignment_gather(alignment_ctx, layer))
     else:
         alignment_answer = [-1] + [-1 for i in range(len(ctx_alignment))] + [-1] + choice_alignment
-        group2use.create_dataset(f'ctx_{subgroup_name}', data=alignment_gather(alignment_ctx, layer))
-        group2use.create_dataset(f'answer_{subgroup_name}', data=alignment_gather(alignment_answer, layer))
+        group2use.create_dataset('ctx_{}'.format(subgroup_name), data=alignment_gather(alignment_ctx, layer))
+        group2use.create_dataset('answer_{}'.format(subgroup_name), data=alignment_gather(alignment_answer, layer))
