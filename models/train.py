@@ -5,6 +5,7 @@ import argparse
 import os
 import shutil
 
+from tensorboardX import SummaryWriter
 import torch.nn.functional as F
 import multiprocessing
 import numpy as np
@@ -48,12 +49,20 @@ parser.add_argument(
     type=str,
 )
 parser.add_argument(
+    '-tensorboard_log',
+    dest='tensorboard_log',
+    help='tensorboard log location',
+    type=str,
+)
+parser.add_argument(
     '-no_tqdm',
     dest='no_tqdm',
     action='store_true',
 )
 
 args = parser.parse_args()
+
+writer = SummaryWriter(tensorboard_log)
 
 params = Params.from_file(args.params)
 train, val = VCR.splits(embs_to_load=params['dataset_reader'].get('embs', 'bert_da'),
@@ -122,6 +131,14 @@ def get_rationale_batches(b, is_train):
     else:
         return _to_gpu(val_loader_ra_0[b]), _to_gpu(val_loader_ra_1[b]), _to_gpu(val_loader_ra_2[b]), _to_gpu(val_loader_ra_3[b])
 
+def log_tensorboard(mode, it, qa_loss, ra_loss, qar_loss, qa_acc, ra_acc, qar_acc):
+    writer.add_scalar('{}.qa_loss'.format(mode), qa_loss, it)
+    writer.add_scalar('{}.ra_loss'.format(mode), ra_loss, it)
+    writer.add_scalar('{}.qra_loss'.format(mode), qra_loss, it)
+    writer.add_scalar('{}.qa_acc'.format(mode), qa_acc, it)
+    writer.add_scalar('{}.ra_acc'.format(mode), ra_acc, it)
+    writer.add_scalar('{}.qra_acc'.format(mode), qra_acc, it)
+
 def cal_accuracy(preds, labels):
     preds = preds.argmax(1)
     labels = labels
@@ -137,7 +154,8 @@ def cal_net_accuracy(qa_preds, qa_label, ra_preds, ra_label):
 
 criterion_ra = torch.nn.CrossEntropyLoss()
 param_shapes = print_para(model)
-num_batches = 0
+num_batches = 0=`=jedi=0, =`=      (*_*object*_*) =`=jedi=`=
+tot_epoch_batch = len(tra
 for epoch_num in range(start_epoch, params['trainer']['num_epochs'] + start_epoch):
     train_results = []
     norms = []
@@ -211,9 +229,9 @@ for epoch_num in range(start_epoch, params['trainer']['num_epochs'] + start_epoc
                                                            F.softmax(out_logits_ra).detach().cpu().numpy(), 
                                                            ra_label.detach().cpu().numpy())
 
-        train_results.append(pd.Series({'loss_qa': loss_qa,
-                                        'loss_ra': loss_ra,
-                                        'net_loss': loss,
+        train_results.append(pd.Series({'loss_qa': loss_qa.item(),
+                                        'loss_ra': loss_ra.item(),
+                                        'net_loss': loss.item(),
                                         'accuracy_qa': qa_accuracy,
                                         'accuracy_ra': ra_accuracy,
                                         'net_accuracy': qar_accuracy,
