@@ -171,7 +171,21 @@ def rational_train(train_loader_ra_iter, model):
         
         ra_label = batch_ra['label'].long().view(-1).cuda() 
         del batch_ra
+
         return output_dict_ra, ra_label
+
+for epoch_num in range(start_epoch, params['trainer']['num_epochs'] + start_epoch):
+    train_results = []
+    norms = []
+
+    model.train()
+    
+    for b, (time_per_batch, batch_qa) in enumerate(time_batch(train_loader_qa if args.no_tqdm else tqdm(train_loader_qa), reset_every=ARGS_RESET_EVERY)):
+
+        batch_qa = _to_gpu(batch_qa)  
+
+    print("---\nTRAIN EPOCH {:2d}:\n{}\n----".format(epoch_num, pd.DataFrame(train_results).mean()))
+    
 
 '''     
 for epoch_num in range(start_epoch, params['trainer']['num_epochs'] + start_epoch):
