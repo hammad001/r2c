@@ -30,6 +30,118 @@
     [".*bias_ih.*", {"type": "zero"}],
     [".*bias_hh.*", {"type": "lstm_hidden_bias"}]]
   },
+  "model_ra_0": {
+    "type": "MultiHopAttentionQA",
+    "span_encoder": {
+      "type": "lstm",
+      "input_size": 1280,
+      "hidden_size": 256,
+      "num_layers": 1,
+      "bidirectional": true
+    },
+    "reasoning_encoder": {
+      "type": "lstm",
+      "input_size": 1536,
+      "hidden_size": 256,
+      "num_layers": 2,
+      "bidirectional": true
+    },
+    "hidden_dim_maxpool": 1024,
+    "input_dropout": 0.3,
+    "pool_question": true,
+    "pool_answer": true,
+    "initializer": [
+    [".*final_mlp.*weight", {"type": "xavier_uniform"}],
+    [".*final_mlp.*bias", {"type": "zero"}],
+    [".*weight_ih.*", {"type": "xavier_uniform"}],
+    [".*weight_hh.*", {"type": "orthogonal"}],
+    [".*bias_ih.*", {"type": "zero"}],
+    [".*bias_hh.*", {"type": "lstm_hidden_bias"}]]
+  },
+  "model_ra_1": {
+    "type": "MultiHopAttentionQA",
+    "span_encoder": {
+      "type": "lstm",
+      "input_size": 1280,
+      "hidden_size": 256,
+      "num_layers": 1,
+      "bidirectional": true
+    },
+    "reasoning_encoder": {
+      "type": "lstm",
+      "input_size": 1536,
+      "hidden_size": 256,
+      "num_layers": 2,
+      "bidirectional": true
+    },
+    "hidden_dim_maxpool": 1024,
+    "input_dropout": 0.3,
+    "pool_question": true,
+    "pool_answer": true,
+    "initializer": [
+    [".*final_mlp.*weight", {"type": "xavier_uniform"}],
+    [".*final_mlp.*bias", {"type": "zero"}],
+    [".*weight_ih.*", {"type": "xavier_uniform"}],
+    [".*weight_hh.*", {"type": "orthogonal"}],
+    [".*bias_ih.*", {"type": "zero"}],
+    [".*bias_hh.*", {"type": "lstm_hidden_bias"}]]
+  },
+  "model_ra_2": {
+    "type": "MultiHopAttentionQA",
+    "span_encoder": {
+      "type": "lstm",
+      "input_size": 1280,
+      "hidden_size": 256,
+      "num_layers": 1,
+      "bidirectional": true
+    },
+    "reasoning_encoder": {
+      "type": "lstm",
+      "input_size": 1536,
+      "hidden_size": 256,
+      "num_layers": 2,
+      "bidirectional": true
+    },
+    "hidden_dim_maxpool": 1024,
+    "input_dropout": 0.3,
+    "pool_question": true,
+    "pool_answer": true,
+    "initializer": [
+    [".*final_mlp.*weight", {"type": "xavier_uniform"}],
+    [".*final_mlp.*bias", {"type": "zero"}],
+    [".*weight_ih.*", {"type": "xavier_uniform"}],
+    [".*weight_hh.*", {"type": "orthogonal"}],
+    [".*bias_ih.*", {"type": "zero"}],
+    [".*bias_hh.*", {"type": "lstm_hidden_bias"}]]
+  },
+  "model_ra_3": {
+    "type": "MultiHopAttentionQA",
+    "span_encoder": {
+      "type": "lstm",
+      "input_size": 1280,
+      "hidden_size": 256,
+      "num_layers": 1,
+      "bidirectional": true
+    },
+    "reasoning_encoder": {
+      "type": "lstm",
+      "input_size": 1536,
+      "hidden_size": 256,
+      "num_layers": 2,
+      "bidirectional": true
+    },
+    "hidden_dim_maxpool": 1024,
+    "input_dropout": 0.3,
+    "pool_question": true,
+    "pool_answer": true,
+    "initializer": [
+    [".*final_mlp.*weight", {"type": "xavier_uniform"}],
+    [".*final_mlp.*bias", {"type": "zero"}],
+    [".*weight_ih.*", {"type": "xavier_uniform"}],
+    [".*weight_hh.*", {"type": "orthogonal"}],
+    [".*bias_ih.*", {"type": "zero"}],
+    [".*bias_hh.*", {"type": "lstm_hidden_bias"}]]
+  },
   "trainer": {
     "optimizer": {
         "type": "adam",

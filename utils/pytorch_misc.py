@@ -106,25 +106,25 @@ def clip_grad_norm(named_parameters, max_norm, clip=True, verbose=False):
     return pd.Series({name: norm.item() for name, norm in param_to_norm.items()})
 
 
-def find_latest_checkpoint(serialization_dir):
+def find_latest_checkpoint(serialization_dir, mode):
     """
     Return the location of the latest model and training state files.
     If there isn't a valid checkpoint then return None.
     """
     have_checkpoint = (serialization_dir is not None and
-                       any("model_state_epoch_" in x for x in os.listdir(serialization_dir)))
+                       any("model_{}_state_epoch_".format(mode) in x for x in os.listdir(serialization_dir)))
 
     if not have_checkpoint:
         return None
 
     serialization_files = os.listdir(serialization_dir)
-    model_checkpoints = [x for x in serialization_files if "model_state_epoch" in x]
+    model_checkpoints = [x for x in serialization_files if "model_{mode}_state_epoch" in x]
     # Get the last checkpoint file.  Epochs are specified as either an
     # int (for end of epoch files) or with epoch and timestamp for
     # within epoch checkpoints, e.g. 5.2018-02-02-15-33-42
     found_epochs = [
         # pylint: disable=anomalous-backslash-in-string
-        re.search("model_state_epoch_([0-9\.\-]+)\.th", x).group(1)
+        re.search("model_{}_state_epoch_([0-9\.\-]+)\.th".format(mode), x).group(1)
         for x in model_checkpoints
     ]
     int_epochs = []
@@ -143,13 +143,13 @@ def find_latest_checkpoint(serialization_dir):
         epoch_to_load = '{0}.{1}'.format(last_epoch[0], last_epoch[1])
 
     model_path = os.path.join(serialization_dir,
-                              "model_state_epoch_{}.th".format(epoch_to_load))
+                              "model_{}_state_epoch_{}.th".format(mode, epoch_to_load))
     training_state_path = os.path.join(serialization_dir,
                                        "training_state_epoch_{}.th".format(epoch_to_load))
     return model_path, training_state_path
 
 
-def save_checkpoint(model, optimizer, serialization_dir, epoch, val_metric_per_epoch, is_best=None,
+def save_checkpoint(model, mode, optimizer, serialization_dir, epoch, val_metric_per_epoch, is_best=None,
                     learning_rate_scheduler=None) -> None:
     """
     Saves a checkpoint of the model to self._serialization_dir.
@@ -165,27 +165,29 @@ def save_checkpoint(model, optimizer, serialization_dir, epoch, val_metric_per_e
         be based on some validation metric computed by your model.
     """
     if serialization_dir is not None:
-        model_path = os.path.join(serialization_dir, "model_state_epoch_{}.th".format(epoch))
+        model_path = os.path.join(serialization_dir, "model_{}_state_epoch_{}.th".format(mode, epoch))
         model_state = model.module.state_dict() if isinstance(model, DataParallel) else model.state_dict()
         torch.save(model_state, model_path)
 
-        training_state = {'epoch': epoch,
-                          'val_metric_per_epoch': val_metric_per_epoch,
-                          'optimizer': optimizer.state_dict()
-                          }
-        if learning_rate_scheduler is not None:
-            training_state["learning_rate_scheduler"] = \
-                learning_rate_scheduler.lr_scheduler.state_dict()
-        training_path = os.path.join(serialization_dir,
-                                     "training_state_epoch_{}.th".format(epoch))
-        torch.save(training_state, training_path)
+        if mode == 'qa':
+            training_state = {'epoch': epoch,
+                              'val_metric_per_epoch': val_metric_per_epoch,
+                              'optimizer': optimizer.state_dict()
+                              }
+            if learning_rate_scheduler is not None:
+                training_state["learning_rate_scheduler"] = \
+                    learning_rate_scheduler.lr_scheduler.state_dict()
+            training_path = os.path.join(serialization_dir,
+                                         "training_state_epoch_{}.th".format(epoch))
+            torch.save(training_state, training_path)
+
         if is_best:
             print("Best validation performance so far. Copying weights to '{}/best.th'.".format(serialization_dir))
-            shutil.copyfile(model_path, os.path.join(serialization_dir, "best.th"))
+            shutil.copyfile(model_path, os.path.join(serialization_dir, "{}.best.th".format(mode)))
 
 
-def restore_best_checkpoint(model, serialization_dir):
-    fn = os.path.join(serialization_dir, 'best.th')
+def restore_best_checkpoint(model, mode, serialization_dir):
+    fn = os.path.join(serialization_dir, '{}.best.th'.format(mode))
     model_state = torch.load(fn, map_location=device_mapping(-1))
     assert os.path.exists(fn)
     if isinstance(model, DataParallel):
@@ -194,7 +196,7 @@ def restore_best_checkpoint(model, serialization_dir):
         model.load_state_dict(model_state)
 
 
-def restore_checkpoint(model, optimizer, serialization_dir, learning_rate_scheduler=None):
+def restore_checkpoint(model, mode, optimizer, serialization_dir, learning_rate_scheduler=None):
     """
     Restores a model from a serialization_dir to the last saved checkpoint.
     This includes an epoch count and optimizer state, which is serialized separately
@@ -210,7 +212,7 @@ def restore_checkpoint(model, optimizer, serialization_dir, learning_rate_schedu
         The epoch at which to resume training, which should be one after the epoch
         in the saved training state.
     """
-    latest_checkpoint = find_latest_checkpoint(serialization_dir)
+    latest_checkpoint = find_latest_checkpoint(serialization_dir, mode)
 
     if latest_checkpoint is None:
         # No checkpoint to restore, start at 0
