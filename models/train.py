@@ -170,7 +170,8 @@ def rational_train(train_loader_ra_iter, model):
         output_dict_ra = model(False, **batch_ra)
         
         ra_label = batch_ra['label'].long().view(-1).cuda() 
-
+        del batch_ra
+        
         return output_dict_ra, ra_label
 
      
@@ -188,7 +189,9 @@ for epoch_num in range(start_epoch, params['trainer']['num_epochs'] + start_epoc
         output_dict_qa = model(True, **batch_qa)
         loss_qa = output_dict_qa['loss'].mean() + output_dict_qa['cnn_regularization_loss'].mean()
 
-        
+        qa_label = batch_qa['label'].long().view(-1).cuda()
+        del batch_qa
+
         loss_ra = 0
 
         for i in range(4):
@@ -211,7 +214,7 @@ for epoch_num in range(start_epoch, params['trainer']['num_epochs'] + start_epoc
 
             loss_ra += output_dict_ra['cnn_regularization_loss'] 
 
-        qa_label = batch_qa['label'].long().view(-1).cuda()
+      
         ra_label = qa_label * 4 + ra_label
 
         loss_ra = criterion_ra(out_logits_ra, ra_label).mean() + (loss_ra/4).mean()
