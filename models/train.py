@@ -231,7 +231,7 @@ for epoch_num in range(start_epoch, params['trainer']['num_epochs'] + start_epoc
                                                            )
         
         # log_tensorboard('train', epoch_num * tot_epoch_batch, loss_qa.detach().cpu().item(), loss_ra.detach().cpu().item(), 
-                         loss.detach().cpu().item(), qa_accuracy, ra_accuracy, qar_accuracy)
+                        #  loss.detach().cpu().item(), qa_accuracy, ra_accuracy, qar_accuracy)
         
         train_results.append(pd.Series({'loss_qa': loss_qa.detach().cpu().item(),
                                         # 'loss_ra': loss_ra.detach().cpu().item(),
