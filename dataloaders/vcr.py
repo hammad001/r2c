@@ -149,12 +149,9 @@ class VCR(Dataset):
         """ Helper method to generate splits of the dataset"""
         kwargs_copy = {x: y for x, y in kwargs.items()}
         
-        train = [cls(split='train', mode='answer', **kwargs)] + [
-            cls(split='train', mode='rationale', conditioned_answer_choice=i, **kwargs) for i in range(4)]
-
-        val =  [cls(split='val', mode='answer', **kwargs)] + [
-            cls(split='val', mode='rationale', conditioned_answer_choice=i, **kwargs) for i in range(4)]
-
+        train = cls(split='train', mode='answer', **kwargs)
+        val =  cls(split='val', mode='answer', **kwargs)
+        
         return train, val
 
     @classmethod
