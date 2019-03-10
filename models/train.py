@@ -213,6 +213,8 @@ for epoch_num in range(start_epoch, params['trainer']['num_epochs'] + start_epoc
         # # QA loss: RA loss ratio is 4:16 since qa chooses out of 4 choices while ra chooses out of 16 choices
         # loss = (4/20) * loss_qa + (16/20) * loss_ra
 
+        loss = loss_qa
+
         loss.backward()
 
         num_batches += 1
