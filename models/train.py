@@ -118,7 +118,7 @@ for epoch_num in range(start_epoch, params['trainer']['num_epochs'] + start_epoc
     for b, (time_per_batch, batch) in enumerate(time_batch(train_loader if args.no_tqdm else tqdm(train_loader), reset_every=ARGS_RESET_EVERY)):
         batch = _to_gpu(batch)
         optimizer.zero_grad()
-        output_dict = model(**batch)
+        output_dict = model(True, **batch)
         loss = output_dict['loss'].mean() + output_dict['cnn_regularization_loss'].mean()
         loss.backward()
 
