@@ -188,7 +188,7 @@ for epoch_num in range(start_epoch, params['trainer']['num_epochs'] + start_epoc
         output_dict_qa = model(True, **batch_qa)
         loss_qa = output_dict_qa['loss'].mean() + output_dict_qa['cnn_regularization_loss'].mean()
 
-        out_logits_ra = None
+        
         loss_ra = 0
 
         for i in range(4):
@@ -203,12 +203,11 @@ for epoch_num in range(start_epoch, params['trainer']['num_epochs'] + start_epoc
 
             if i == 0:
                 output_dict_ra, ra_label = rational_train(train_loader_ra_iter, model)
+                out_logits_ra = output_dict_ra['label_logits']
             else: 
                 output_dict_ra, _ = rational_train(train_loader_ra_iter, model)
-
-            out_logits_ra_i = output_dict_ra['label_logits']
-
-            out_logits_ra = torch.cat((out_logits_ra, out_logits_ra_i), 1) 
+                out_logits_ra_i = output_dict_ra['label_logits']
+                out_logits_ra = torch.cat((out_logits_ra, out_logits_ra_i), 1) 
 
             loss_ra += output_dict_ra['cnn_regularization_loss'] 
 
