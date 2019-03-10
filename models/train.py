@@ -79,13 +79,13 @@ def _to_gpu(td):
 num_workers = (4 * NUM_GPUS if NUM_CPUS == 32 else 2*NUM_GPUS)-1
 print(f"Using {num_workers} workers out of {NUM_CPUS} possible", flush=True)
 loader_params = {'batch_size': 96 // NUM_GPUS, 'num_gpus':NUM_GPUS, 'num_workers':num_workers}
-train_loader = VCRLoader.from_dataset(train[0], **loader_params)
-val_loader = VCRLoader.from_dataset(val[0], **loader_params)
+train_loader = VCRLoader.from_dataset(train, **loader_params)
+val_loader = VCRLoader.from_dataset(val, **loader_params)
 #test_loader = VCRLoader.from_dataset(test, **loader_params)
 
 ARGS_RESET_EVERY = 100
 print("Loading {} for {}".format(params['model'].get('type', 'WTF?'), 'rationales' if args.rationale else 'answer'), flush=True)
-model = Model.from_params(vocab=train[0].vocab, params=params['model'])
+model = Model.from_params(vocab=train.vocab, params=params['model'])
 for submodule in model.detector.backbone.modules():
     if isinstance(submodule, BatchNorm2d):
         submodule.track_running_stats = False
