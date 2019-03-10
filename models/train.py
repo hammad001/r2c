@@ -171,10 +171,9 @@ def rational_train(train_loader_ra_iter, model):
         
         ra_label = batch_ra['label'].long().view(-1).cuda() 
         del batch_ra
-        
         return output_dict_ra, ra_label
 
-     
+'''     
 for epoch_num in range(start_epoch, params['trainer']['num_epochs'] + start_epoch):
     train_results = []
     norms = []
@@ -428,3 +427,4 @@ print("Final ra val accuracy is {:.3f}".format(ra_accuracy))
 print("Final qar val accuracy is {:.3f}".format(qar_accuracy))
 np.save(os.path.join(args.folder, f'valpreds_qa.npy'), val_probs_qa)
 np.save(os.path.join(args.folder, f'valpreds_ra.npy'), val_probs_ra)
+'''
