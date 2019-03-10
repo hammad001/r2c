@@ -148,12 +148,14 @@ class VCR(Dataset):
     def splits(cls, **kwargs):
         """ Helper method to generate splits of the dataset"""
         kwargs_copy = {x: y for x, y in kwargs.items()}
-        if 'mode' not in kwargs:
-            kwargs_copy['mode'] = 'answer'
-        train = cls(split='train', **kwargs_copy)
-        val = cls(split='val', **kwargs_copy)
-        test = cls(split='test', **kwargs_copy)
-        return train, val, test
+        
+        train = [cls(split='train', mode='answer', **kwargs)] + [
+            cls(split='train', mode='rationale', conditioned_answer_choice=i, **kwargs) for i in range(4)]
+
+        val =  [cls(split='val', mode='answer', **kwargs)] + [
+            cls(split='val', mode='rationale', conditioned_answer_choice=i, **kwargs) for i in range(4)]
+
+        return train, val
 
     @classmethod
     def eval_splits(cls, **kwargs):
@@ -218,7 +220,7 @@ class VCR(Dataset):
         ###################################################################
         # Load questions and answers
         if self.mode == 'rationale':
-            conditioned_label = item['answer_label'] if self.split != 'test' else self.conditioned_answer_choice
+            conditioned_label = self.conditioned_answer_choice
             item['question'] += item['answer_choices'][conditioned_label]
 
         answer_choices = item['{}_choices'.format(self.mode)]
@@ -232,7 +234,7 @@ class VCR(Dataset):
 
         # Essentially we need to condition on the right answer choice here, if we're doing QA->R. We will always
         # condition on the `conditioned_answer_choice.`
-        condition_key = self.conditioned_answer_choice if self.split == "test" and self.mode == "rationale" else ""
+        condition_key = self.conditioned_answer_choice if self.mode == "rationale" else ""
 
         instance_dict = {}
         if 'endingonly' not in self.embs_to_load:
