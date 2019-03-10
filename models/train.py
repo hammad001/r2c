@@ -85,7 +85,7 @@ val_loader = VCRLoader.from_dataset(val[0], **loader_params)
 
 ARGS_RESET_EVERY = 100
 print("Loading {} for {}".format(params['model'].get('type', 'WTF?'), 'rationales' if args.rationale else 'answer'), flush=True)
-model = Model.from_params(vocab=train.vocab, params=params['model'])
+model = Model.from_params(vocab=train[0].vocab, params=params['model'])
 for submodule in model.detector.backbone.modules():
     if isinstance(submodule, BatchNorm2d):
         submodule.track_running_stats = False
