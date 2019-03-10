@@ -156,59 +156,66 @@ criterion_ra = torch.nn.CrossEntropyLoss().cuda()
 param_shapes = print_para(model)
 num_batches = 0
 tot_epoch_batch = len(train_loader_qa)
+
+train_loader_ra_0_iter = iter(train_loader_ra_0)
+train_loader_ra_1_iter = iter(train_loader_ra_1)
+train_loader_ra_2_iter = iter(train_loader_ra_2)
+train_loader_ra_3_iter = iter(train_loader_ra_3)
+
+def rational_train(train_loader_ra_iter, model):
+    
+        batch_ra = train_loader_ra_iter.next()
+
+        batch_ra = _to_gpu(batch_ra)  
+        output_dict_ra = model(False, **batch_ra)
+        
+        ra_label = batch_ra['label'].long().view(-1).cuda() 
+
+        return output_dict_ra, ra_label
+
+     
 for epoch_num in range(start_epoch, params['trainer']['num_epochs'] + start_epoch):
     train_results = []
     norms = []
-    train_loader_ra_0_iter = iter(train_loader_ra_0)
-    train_loader_ra_1_iter = iter(train_loader_ra_1)
-    train_loader_ra_2_iter = iter(train_loader_ra_2)
-    train_loader_ra_3_iter = iter(train_loader_ra_3)
 
     model.train()
+    
     for b, (time_per_batch, batch_qa) in enumerate(time_batch(train_loader_qa if args.no_tqdm else tqdm(train_loader_qa), reset_every=ARGS_RESET_EVERY)):
         
-        batch_qa = _to_gpu(batch_qa)
-        try:
-            batch_ra_0 = train_loader_ra_0_iter.next()
-            batch_ra_1 = train_loader_ra_1_iter.next()
-            batch_ra_2 = train_loader_ra_2_iter.next()
-            batch_ra_3 = train_loader_ra_3_iter.next()
-        except StopIteration:
-            train_loader_ra_0_iter = iter(train_loader_ra_0)
-            train_loader_ra_1_iter = iter(train_loader_ra_1)
-            train_loader_ra_2_iter = iter(train_loader_ra_2)
-            train_loader_ra_3_iter = iter(train_loader_ra_3)
-            
-            batch_ra_0 = train_loader_ra_0_iter.next()
-            batch_ra_1 = train_loader_ra_1_iter.next()
-            batch_ra_2 = train_loader_ra_2_iter.next()
-            batch_ra_3 = train_loader_ra_3_iter.next()
-
-        batch_ra_0, batch_ra_1, batch_ra_2, batch_ra_3 = _to_gpu(batch_ra_0), _to_gpu(batch_ra_1), _to_gpu(batch_ra_2), _to_gpu(batch_ra_3)
-        
         optimizer.zero_grad()
-        
+
+        batch_qa = _to_gpu(batch_qa)        
         output_dict_qa = model(True, **batch_qa)
-        output_dict_ra_0 = model(False, **batch_ra_0)
-        output_dict_ra_1 = model(False, **batch_ra_1)
-        output_dict_ra_2 = model(False, **batch_ra_2)
-        output_dict_ra_3 = model(False, **batch_ra_3)
-        
         loss_qa = output_dict_qa['loss'].mean() + output_dict_qa['cnn_regularization_loss'].mean()
 
-        out_logits_ra_0 = output_dict_ra_0['label_logits']
-        out_logits_ra_1 = output_dict_ra_1['label_logits']
-        out_logits_ra_2 = output_dict_ra_2['label_logits']
-        out_logits_ra_3 = output_dict_ra_3['label_logits']
+        out_logits_ra = None
+        loss_ra = 0
 
-        out_logits_ra = torch.cat((out_logits_ra_0, out_logits_ra_1, out_logits_ra_2, out_logits_ra_3), 1) 
+        for i in range(4):
+            if i == 0:
+                train_loader_ra_iter = train_loader_ra_0_iter
+            elif i == 1:
+                train_loader_ra_iter = train_loader_ra_1_iter                
+            elif i == 2:
+                train_loader_ra_iter = train_loader_ra_2_iter                
+            else:
+                train_loader_ra_iter = train_loader_ra_3_iter
+
+            if i == 0:
+                output_dict_ra, ra_label = rational_train(train_loader_ra_iter, model)
+            else: 
+                output_dict_ra, _ = rational_train(train_loader_ra_iter, model)
+
+            out_logits_ra_i = output_dict_ra['label_logits']
+
+            out_logits_ra = torch.cat((out_logits_ra, out_logits_ra_i), 1) 
+
+            loss_ra += output_dict_ra['cnn_regularization_loss'] 
+
         qa_label = batch_qa['label'].long().view(-1).cuda()
-        ra_label = batch_ra_0['label'].long().view(-1).cuda()
         ra_label = qa_label * 4 + ra_label
 
-        loss_ra = criterion_ra(out_logits_ra, ra_label).mean() + ((output_dict_ra_0['cnn_regularization_loss'] + 
-                output_dict_ra_1['cnn_regularization_loss'] +output_dict_ra_2['cnn_regularization_loss'] + 
-                output_dict_ra_3['cnn_regularization_loss'])/4).mean()
+        loss_ra = criterion_ra(out_logits_ra, ra_label).mean() + (loss_ra/4).mean()
         
         # QA loss: RA loss ratio is 4:16 since qa chooses out of 4 choices while ra chooses out of 16 choices
         loss = (4/20) * loss_qa + (16/20) * loss_ra
