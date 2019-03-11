@@ -414,17 +414,17 @@ class AttentionRA(Model):
 
             #print("shape", logits.size(), attended_q.size() )
 
-            try:
-                if i == 0:
-                    w_attended_q = logits[:,i].unsqueeze(1).expand_as(attended_q)*attended_q
-                else:
-                    w_attended_q += logits[:,i].unsqueeze(1).expand_as(attended_q)*attended_q
+            #try:
+            if i == 0:
+                w_attended_q = logits[:,i].unsqueeze(1).expand_as(attended_q)*attended_q
+            else:
+                w_attended_q += logits[:,i].unsqueeze(1).expand_as(attended_q)*attended_q
 
-                w_attended_q = w_attended_q.reshape(batch_size, 4, question_length, answer_length)
+            w_attended_q = w_attended_q.reshape(batch_size, 4, question_length, answer_length)
                 
-            except:
-                import pdb
-                pdb.set_trace()            
+            # except:
+            #     import pdb
+            #     pdb.set_trace()            
 
         reasoning_inp = torch.cat([x for x, to_pool in [(a_rep, self.reasoning_use_answer),
                                                             (attended_o, self.reasoning_use_obj),
