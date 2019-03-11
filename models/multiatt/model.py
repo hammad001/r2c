@@ -422,7 +422,8 @@ class AttentionRA(Model):
                 
             except:
                 import pdb
-                pdb.set_trace()            
+                pdb.set_trace()  
+                          
         w_attended_q = w_attended_q.reshape(batch_size, 4, question_length, answer_length)
 
         reasoning_inp = torch.cat([x for x, to_pool in [(a_rep, self.reasoning_use_answer),
