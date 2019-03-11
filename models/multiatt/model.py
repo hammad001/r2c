@@ -359,6 +359,10 @@ class AttentionRA(Model):
                 boxes = batch_ra['boxes']
                 box_mask = batch_ra['box_mask']
 
+                answer_tags = batch_ra['answer_tags']
+                answers = batch_ra['answer']
+                answer_mask = batch_ra['answer_mask']
+
                 max_len = int(box_mask.sum(1).max().item())
                 objects = objects[:, :max_len]
                 box_mask = box_mask[:, :max_len]
@@ -372,10 +376,6 @@ class AttentionRA(Model):
                         ))
 
                 obj_reps = self.detector(images=images, boxes=boxes, box_mask=box_mask, classes=objects, segms=segms)
-
-                answer_tags = batch_ra['answer_tags']
-                answers = batch_ra['answer']
-                answer_mask = batch_ra['answer_mask']
 
                 a_rep, _ = self.embed_span(answers, answer_tags, answer_mask, obj_reps['obj_reps'])
                 
