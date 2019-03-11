@@ -420,12 +420,13 @@ class AttentionRA(Model):
             else:
                 w_attended_q += logits[:,i].unsqueeze(1).expand_as(attended_q)*attended_q
 
-            w_attended_q = w_attended_q.reshape(batch_size, 4, question_length, answer_length)
+            
                 
             # except:
             #     import pdb
             #     pdb.set_trace()            
-
+        w_attended_q = w_attended_q.reshape(batch_size, 4, question_length, answer_length)
+        
         reasoning_inp = torch.cat([x for x, to_pool in [(a_rep, self.reasoning_use_answer),
                                                             (attended_o, self.reasoning_use_obj),
                                                             (w_attended_q, self.reasoning_use_question)]
