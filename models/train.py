@@ -103,7 +103,7 @@ ARGS_RESET_EVERY = 100
 print("Loading {} ".format(params['model'].get('type', 'WTF?')), flush=True)
 
 model_qa = Model.from_params(vocab=train[0].vocab, params=params['model'])
-model_ra = Model.by_name('MultiHopAttentionRA').from_params(vocab=train[0].vocab, params=params['model_ra'])
+model_ra = Model.from_params(vocab=train[0].vocab, params=params['model_ra'])
 
 def make_backbone_req_grad_false(model):
     for submodule in model.detector.backbone.modules():
@@ -209,8 +209,8 @@ for epoch_num in range(start_epoch, params['trainer']['num_epochs'] + start_epoc
         optimizer.zero_grad()
         
         output_dict_qa = model_qa(**batch_qa)
-        logit = output_dict_qa['label_logits']
-        output_dict_ra = model_ra(logit, batch_ra_0, batch_ra_1, batch_ra_2, batch_ra_3)
+        logits = output_dict_qa['label_logits']
+        output_dict_ra = model_ra(logits, batch_ra_0, batch_ra_1, batch_ra_2, batch_ra_3)
 
         loss_qa = output_dict_qa['loss'].mean() + output_dict_qa['cnn_regularization_loss'].mean()
         loss_ra = output_dict_ra['loss'].mean() + output_dict_ra['cnn_regularization_loss'].mean()
