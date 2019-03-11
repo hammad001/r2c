@@ -81,7 +81,7 @@ def _to_gpu(td):
                 non_blocking=True)
     return td
 
-num_workers = (4 * NUM_GPUS if NUM_CPUS >= 32 else 2*NUM_GPUS)-1
+num_workers = 6 # (4 * NUM_GPUS if NUM_CPUS >= 32 else 2*NUM_GPUS)-1
 print(f"Using {num_workers} workers out of {NUM_CPUS} possible", flush=True)
 loader_params = {'batch_size': 96 // NUM_GPUS, 'num_gpus':NUM_GPUS, 'num_workers':num_workers}
 
@@ -272,7 +272,7 @@ for epoch_num in range(start_epoch, params['trainer']['num_epochs'] + start_epoc
                                                            F.softmax(out_logits_ra, dim=-1).detach().cpu().numpy(), 
                                                            ra_label.detach().cpu().numpy())
         
-        log_tensorboard('train', epoch_num * tot_epoch_batch, loss_qa.detach().cpu().item(), loss_ra.detach().cpu().item(), 
+        log_tensorboard('train', epoch_num * tot_epoch_batch + b, loss_qa.detach().cpu().item(), loss_ra.detach().cpu().item(), 
                          loss.detach().cpu().item(), qa_accuracy, ra_accuracy, qar_accuracy)
         
         train_results.append(pd.Series({'loss_qa': loss_qa.detach().cpu().item(),
@@ -308,7 +308,6 @@ for epoch_num in range(start_epoch, params['trainer']['num_epochs'] + start_epoc
     model_ra_1.eval()
     model_ra_2.eval()
     model_ra_3.eval()
-    model_ra_4.eval()
     
     val_loader_ra_0_iter = iter(val_loader_ra_0)
     val_loader_ra_1_iter = iter(val_loader_ra_1)
@@ -352,8 +351,8 @@ for epoch_num in range(start_epoch, params['trainer']['num_epochs'] + start_epoc
             out_logits_ra_3 = output_dict_ra_3['label_logits']
 
             out_logits_ra = torch.cat((out_logits_ra_0, out_logits_ra_1, out_logits_ra_2, out_logits_ra_3), 1) 
-            qa_label = batch_qa['label'].long().view(-1)
-            ra_label = batch_ra_0['label'].long().view(-1)
+            qa_label = batch_qa['label'].long().view(-1).cuda()
+            ra_label = batch_ra_0['label'].long().view(-1).cuda()
             ra_label = qa_label * 4 + ra_label
 
             loss_ra = criterion_ra(out_logits_ra, ra_label).mean().item() * batch_qa['label'].shape[0]
@@ -372,14 +371,14 @@ for epoch_num in range(start_epoch, params['trainer']['num_epochs'] + start_epoc
     val_probs_ra = np.concatenate(val_probs_ra, 0)
     
     qa_accuracy, ra_accuracy, qar_accuracy = cal_net_accuracy(val_probs_qa, val_labels_qa,
-                                                           val_probs_ra, val_label_ra)
+                                                           val_probs_ra, val_labels_ra)
 
     val_loss_avg_qa = val_loss_sum_qa / val_labels_qa.shape[0]
     val_loss_avg_ra = val_loss_sum_ra / val_labels_ra.shape[0]
-    val_loss_avg_qar = val_loss_sum_qar / val_labels_qar.shape[0]
+    val_loss_avg_qar = val_loss_sum_qar / val_labels_qa.shape[0]
 
-    log_tensorboard('val', epoch_num * tot_epoch_batch, val_loss_avg_qa.detach().cpu().item(), val_loss_avg_ra.detach().cpu().item(), 
-                         val_loss_avg_qar.detach().cpu().item(), qa_accuracy, ra_accuracy, qar_accuracy)
+    log_tensorboard('val', epoch_num * tot_epoch_batch, val_loss_avg_qa, val_loss_avg_ra, 
+                         val_loss_avg_qar, qa_accuracy, ra_accuracy, qar_accuracy)
 
 
     val_metric_per_epoch.append(qar_accuracy)
@@ -418,7 +417,6 @@ model_ra_0.eval()
 model_ra_1.eval()
 model_ra_2.eval()
 model_ra_3.eval()
-model_ra_4.eval()
  
 val_probs_qa = []
 val_probs_ra = []
@@ -479,7 +477,7 @@ val_probs_qa = np.concatenate(val_probs_qa, 0)
 val_probs_ra = np.concatenate(val_probs_ra, 0)
     
 qa_accuracy, ra_accuracy, qar_accuracy = cal_net_accuracy(val_probs_qa, val_labels_qa,
-                                                           val_probs_ra, val_label_ra)
+                                                           val_probs_ra, val_labels_ra)
 
 print("Final qa val accuracy is {:.3f}".format(qa_accuracy))
 print("Final ra val accuracy is {:.3f}".format(ra_accuracy))
