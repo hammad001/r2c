@@ -30,8 +30,8 @@
     [".*bias_ih.*", {"type": "zero"}],
     [".*bias_hh.*", {"type": "lstm_hidden_bias"}]]
   },
-  "model_ra_0": {
-    "type": "MultiHopAttentionQA",
+  "model_ra": {
+    "type": "MultiHopAttentionRA",
     "span_encoder": {
       "type": "lstm",
       "input_size": 1280,

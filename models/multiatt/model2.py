@@ -16,7 +16,7 @@ from utils.detector import SimpleDetector
 from allennlp.nn.util import masked_softmax, weighted_sum, replace_masked_values
 from allennlp.nn import InitializerApplicator
 
-@Model.register("MultiHopAttentionQA")
+@Model.register("MultiHopAttentionRA")
 class AttentionQA(Model):
     def __init__(self,
                  vocab: Vocabulary,
@@ -110,19 +110,13 @@ class AttentionQA(Model):
         return self.span_encoder(span_rep, span_mask), retrieved_feats
 
     def forward(self,
-                images: torch.Tensor,
-                objects: torch.LongTensor,
-                segms: torch.Tensor,
-                boxes: torch.Tensor,
-                box_mask: torch.LongTensor,
-                question: Dict[str, torch.Tensor],
-                question_tags: torch.LongTensor,
-                question_mask: torch.LongTensor,
-                answers: Dict[str, torch.Tensor],
-                answer_tags: torch.LongTensor,
-                answer_mask: torch.LongTensor,
-                metadata: List[Dict[str, Any]] = None,
-                label: torch.LongTensor = None) -> Dict[str, torch.Tensor]:
+                cal_loss: bool,
+                logits: torch.Tensor,
+                batch_ra_0,
+                batch_ra_1,
+                batch_ra_2,
+                batch_ra_3) -> Dict[str, torch.Tensor]:
+
         """
         :param images: [batch_size, 3, im_height, im_width]
         :param objects: [batch_size, max_num_objects] Padded objects
@@ -140,48 +134,90 @@ class AttentionQA(Model):
         """
         # Trim off boxes that are too long. this is an issue b/c dataparallel, it'll pad more zeros that are
         # not needed
-        max_len = int(box_mask.sum(1).max().item())
-        objects = objects[:, :max_len]
-        box_mask = box_mask[:, :max_len]
-        boxes = boxes[:, :max_len]
-        segms = segms[:, :max_len]
-
-        for tag_type, the_tags in (('question', question_tags), ('answer', answer_tags)):
-            if int(the_tags.max()) > max_len:
-                raise ValueError("Oh no! {}_tags has maximum of {} but objects is of dim {}. Values are\n{}".format(
-                    tag_type, int(the_tags.max()), objects.shape, the_tags
-                ))
-
-        obj_reps = self.detector(images=images, boxes=boxes, box_mask=box_mask, classes=objects, segms=segms)
-
+       
         # Now get the question representations
-        q_rep, q_obj_reps = self.embed_span(question, question_tags, question_mask, obj_reps['obj_reps'])
-        a_rep, a_obj_reps = self.embed_span(answers, answer_tags, answer_mask, obj_reps['obj_reps'])
 
-        ####################################
-        # Perform Q by A attention
-        # [batch_size, 4, question_length, answer_length]
-        qa_similarity = self.span_attention(
-            q_rep.view(q_rep.shape[0] * q_rep.shape[1], q_rep.shape[2], q_rep.shape[3]),
-            a_rep.view(a_rep.shape[0] * a_rep.shape[1], a_rep.shape[2], a_rep.shape[3]),
-        ).view(a_rep.shape[0], a_rep.shape[1], q_rep.shape[2], a_rep.shape[2])
-        qa_attention_weights = masked_softmax(qa_similarity, question_mask[..., None], dim=2)
-        attended_q = torch.einsum('bnqa,bnqd->bnad', (qa_attention_weights, q_rep))
+        for i in range(4):
+            if i==0:
+                batch_ra = batch_ra_0
+                
+                images = batch_ra['images']
+                objects = batch_ra['objects']
+                segms =  batch_ra['segms']
+                boxes = batch_ra['boxes']
+                box_mask = batch_ra['box_mask']
 
-        # Have a second attention over the objects, do A by Objs
-        # [batch_size, 4, answer_length, num_objs]
-        atoo_similarity = self.obj_attention(a_rep.view(a_rep.shape[0], a_rep.shape[1] * a_rep.shape[2], -1),
-                                             obj_reps['obj_reps']).view(a_rep.shape[0], a_rep.shape[1],
-                                                            a_rep.shape[2], obj_reps['obj_reps'].shape[1])
-        atoo_attention_weights = masked_softmax(atoo_similarity, box_mask[:,None,None])
-        attended_o = torch.einsum('bnao,bod->bnad', (atoo_attention_weights, obj_reps['obj_reps']))
+                max_len = int(box_mask.sum(1).max().item())
+                objects = objects[:, :max_len]
+                box_mask = box_mask[:, :max_len]
+                boxes = boxes[:, :max_len]
+                segms = segms[:, :max_len]
 
+                for tag_type, the_tags in (('question', question_tags), ('answer', answer_tags)):
+                    if int(the_tags.max()) > max_len:
+                        raise ValueError("Oh no! {}_tags has maximum of {} but objects is of dim {}. Values are\n{}".format(
+                            tag_type, int(the_tags.max()), objects.shape, the_tags
+                        ))
+
+                obj_reps = self.detector(images=images, boxes=boxes, box_mask=box_mask, classes=objects, segms=segms)
+
+                answer_tags = batch_ra['answer_tags']
+                answers = batch_ra['answer']
+                answer_mask = batch_ra['answer_mask']
+
+                a_rep, _ = self.embed_span(answers, answer_tags, answer_mask, obj_reps['obj_reps'])
+                
+                
+                # Have a second attention over the objects, do A by Objs
+                # [batch_size, 4, answer_length, num_objs]
+                atoo_similarity = self.obj_attention(a_rep.view(a_rep.shape[0], a_rep.shape[1] * a_rep.shape[2], -1),
+                                                    obj_reps['obj_reps']).view(a_rep.shape[0], a_rep.shape[1],
+                                                                    a_rep.shape[2], obj_reps['obj_reps'].shape[1])
+                atoo_attention_weights = masked_softmax(atoo_similarity, box_mask[:,None,None])
+                attended_o = torch.einsum('bnao,bod->bnad', (atoo_attention_weights, obj_reps['obj_reps']))
+
+                metadata = batch_ra['metadata']
+                label = batch_ra['label']
+
+            elif i==2:
+                batch_ra = batch_ra_1
+            elif i==2:
+                batch_ra = batch_ra_2
+            elif i==3:
+                batch_ra = batch_ra_3
+                
+            question = batch_ra['question']
+            question_tags = batch_ra['question_tags']
+            question_mask = batch_ra['question_mask']
+
+            
+            q_rep, _ = self.embed_span(question, question_tags, question_mask, obj_reps['obj_reps'])
+            
+
+             ####################################
+            # Perform Q by A attention
+            # [batch_size, 4, question_length, answer_length]
+
+            qa_similarity = self.span_attention(
+                q_rep.view(q_rep.shape[0] * q_rep.shape[1], q_rep.shape[2], q_rep.shape[3]),
+                a_rep.view(a_rep.shape[0] * a_rep.shape[1], a_rep.shape[2], a_rep.shape[3]),
+            ).view(a_rep.shape[0], a_rep.shape[1], q_rep.shape[2], a_rep.shape[2])
+            qa_attention_weights = masked_softmax(qa_similarity, question_mask[..., None], dim=2)
+            attended_q = torch.einsum('bnqa,bnqd->bnad', (qa_attention_weights, q_rep))
+
+            if i == 0:
+                w_attended_q = logits[:,i]*attended_q
+                w_attended_q = logits[:,i]*attended_q
+            else:
+                w_attended_q += logits[:,i]*attended_q
+                w_attended_q += logits[:,i]*attended_q
 
         reasoning_inp = torch.cat([x for x, to_pool in [(a_rep, self.reasoning_use_answer),
-                                                           (attended_o, self.reasoning_use_obj),
-                                                           (attended_q, self.reasoning_use_question)]
-                                      if to_pool], -1)
+                                                            (attended_o, self.reasoning_use_obj),
+                                                            (w_attended_q, self.reasoning_use_question)]
+                                        if to_pool], -1)
 
+       
         if self.rnn_input_dropout is not None:
             reasoning_inp = self.rnn_input_dropout(reasoning_inp)
         reasoning_output = self.reasoning_encoder(reasoning_inp, answer_mask)
@@ -190,7 +226,7 @@ class AttentionQA(Model):
         ###########################################
         things_to_pool = torch.cat([x for x, to_pool in [(reasoning_output, self.pool_reasoning),
                                                          (a_rep, self.pool_answer),
-                                                         (attended_q, self.pool_question)] if to_pool], -1)
+                                                         (w_attended_q, self.pool_question)] if to_pool], -1)
 
         pooled_rep = replace_masked_values(things_to_pool,answer_mask[...,None], -1e7).max(2)[0]
         logits = self.final_mlp(pooled_rep).squeeze(2)
