@@ -405,13 +405,19 @@ class AttentionRA(Model):
             ).view(a_rep.shape[0], a_rep.shape[1], q_rep.shape[2], a_rep.shape[2])
             qa_attention_weights = masked_softmax(qa_similarity, question_mask[..., None], dim=2)
             attended_q = torch.einsum('bnqa,bnqd->bnad', (qa_attention_weights, q_rep))
+            
+            print("shape", logits.size(), attended_q.size() )
 
-            if i == 0:
-                w_attended_q = logits[:,i]*attended_q
-                w_attended_q = logits[:,i]*attended_q
-            else:
-                w_attended_q += logits[:,i]*attended_q
-                w_attended_q += logits[:,i]*attended_q
+            try:
+                if i == 0:
+                    w_attended_q = logits[:,i]*attended_q
+                    w_attended_q = logits[:,i]*attended_q
+                else:
+                    w_attended_q += logits[:,i]*attended_q
+                    w_attended_q += logits[:,i]*attended_q
+            except:
+                import ipdb
+                ipdb.set_trace()            
 
         reasoning_inp = torch.cat([x for x, to_pool in [(a_rep, self.reasoning_use_answer),
                                                             (attended_o, self.reasoning_use_obj),
