@@ -17,7 +17,7 @@ from allennlp.nn.util import masked_softmax, weighted_sum, replace_masked_values
 from allennlp.nn import InitializerApplicator
 
 @Model.register("MultiHopAttentionRA")
-class AttentionQA(Model):
+class AttentionRA(Model):
     def __init__(self,
                  vocab: Vocabulary,
                  span_encoder: Seq2SeqEncoder,
@@ -33,7 +33,7 @@ class AttentionQA(Model):
                  pool_question: bool = False,
                  initializer: InitializerApplicator = InitializerApplicator(),
                  ):
-        super(AttentionQA, self).__init__(vocab)
+        super(AttentionRA, self).__init__(vocab)
 
         self.detector = SimpleDetector(pretrained=True, average_pool=True, semantic=class_embs, final_dim=512)
         ###################################################################################################
