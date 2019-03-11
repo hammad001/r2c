@@ -360,7 +360,7 @@ class AttentionRA(Model):
                 box_mask = batch_ra['box_mask']
 
                 answer_tags = batch_ra['answer_tags']
-                answers = batch_ra['answer']
+                answers = batch_ra['answers']
                 answer_mask = batch_ra['answer_mask']
 
                 max_len = int(box_mask.sum(1).max().item())
