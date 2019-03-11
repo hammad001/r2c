@@ -340,6 +340,18 @@ class AttentionRA(Model):
         for i in range(4):
             if i==0:
                 batch_ra = batch_ra_0
+            elif i==2:
+                batch_ra = batch_ra_1
+            elif i==2:
+                batch_ra = batch_ra_2
+            elif i==3:
+                batch_ra = batch_ra_3
+                
+            question = batch_ra['question']
+            question_tags = batch_ra['question_tags']
+            question_mask = batch_ra['question_mask']
+
+            if i==0:
                 
                 images = batch_ra['images']
                 objects = batch_ra['objects']
@@ -378,21 +390,10 @@ class AttentionRA(Model):
 
                 metadata = batch_ra['metadata']
                 label = batch_ra['label']
-
-            elif i==2:
-                batch_ra = batch_ra_1
-            elif i==2:
-                batch_ra = batch_ra_2
-            elif i==3:
-                batch_ra = batch_ra_3
-                
-            question = batch_ra['question']
-            question_tags = batch_ra['question_tags']
-            question_mask = batch_ra['question_mask']
-
             
             q_rep, _ = self.embed_span(question, question_tags, question_mask, obj_reps['obj_reps'])
             
+
 
              ####################################
             # Perform Q by A attention
