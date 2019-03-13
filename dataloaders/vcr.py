@@ -211,7 +211,7 @@ class VCR(Dataset):
         old_det_to_new_ind = old_det_to_new_ind.tolist()
         return dets2use, old_det_to_new_ind
 
-    def _get_dets_to_use_ra(self, item):
+    def _get_dets_to_use_ra(self, item, question):
         """
         We might want to use fewer detectiosn so lets do so.
         :param item:
@@ -220,7 +220,7 @@ class VCR(Dataset):
         :return:
         """
         # Load questions and answers
-        question = item['question']
+        #question = item['question']
         answer_choices = item['{}_choices'.format("rationale")]
 
         if self.only_use_relevant_dets:
@@ -273,7 +273,6 @@ class VCR(Dataset):
         answer_choices_ra = item['{}_choices'.format("rationale")]
         #???
         dets2use, old_det_to_new_ind = self._get_dets_to_use(item)
-        dets2use_ra, old_det_to_new_ind_ra = self._get_dets_to_use_ra(item)
 
         ###################################################################
         # Load in BERT. We'll get contextual representations of the context and the answer choices
@@ -317,6 +316,9 @@ class VCR(Dataset):
         for j in range(4):
                 
             condition_key = j #self.conditioned_answer_choice if self.mode == "rationale" else ""
+
+            
+            _, old_det_to_new_ind_ra = self._get_dets_to_use_ra(item, item_question[f'question_ra_{j}'])
 
             instance_dict = {}
             if 'endingonly' not in self.embs_to_load:
@@ -395,32 +397,35 @@ class VCR(Dataset):
         instance_dict['boxes'] = ArrayField(boxes, padding_value=-1)
 
         ###############################
-        segms = np.stack([make_mask(mask_size=14, box=metadata['boxes'][i], polygons_list=metadata['segms'][i])
-                          for i in dets2use_ra])
+        for j in range(4):
+            dets2use_ra, _ = self._get_dets_to_use_ra(item, item_question[f'question_ra_{j}'])
+                
+            segms = np.stack([make_mask(mask_size=14, box=metadata['boxes'][i], polygons_list=metadata['segms'][i])
+                            for i in dets2use_ra])
 
-        # Chop off the final dimension, that's the confidence
-        boxes = np.array(metadata['boxes'])[dets2use_ra, :-1]
-        # Possibly rescale them if necessary
-        boxes *= img_scale
-        boxes[:, :2] += np.array(padding[:2])[None]
-        boxes[:, 2:] += np.array(padding[:2])[None]
-        obj_labels = [self.coco_obj_to_ind[item['objects'][i]] for i in dets2use.tolist()]
-        if self.add_image_as_a_box:
-            boxes = np.row_stack((window, boxes))
-            segms = np.concatenate((np.ones((1, 14, 14), dtype=np.float32), segms), 0)
-            obj_labels = [self.coco_obj_to_ind['__background__']] + obj_labels
+            # Chop off the final dimension, that's the confidence
+            boxes = np.array(metadata['boxes'])[dets2use_ra, :-1]
+            # Possibly rescale them if necessary
+            boxes *= img_scale
+            boxes[:, :2] += np.array(padding[:2])[None]
+            boxes[:, 2:] += np.array(padding[:2])[None]
+            obj_labels = [self.coco_obj_to_ind[item['objects'][i]] for i in dets2use.tolist()]
+            if self.add_image_as_a_box:
+                boxes = np.row_stack((window, boxes))
+                segms = np.concatenate((np.ones((1, 14, 14), dtype=np.float32), segms), 0)
+                obj_labels = [self.coco_obj_to_ind['__background__']] + obj_labels
 
-        instance_dict['segms_ra'] = ArrayField(segms, padding_value=0)
-        instance_dict['objects_ra'] = ListField([LabelField(x, skip_indexing=True) for x in obj_labels])
+            instance_dict['segms_ra'] = ArrayField(segms, padding_value=0)
+            instance_dict['objects_ra'] = ListField([LabelField(x, skip_indexing=True) for x in obj_labels])
 
-        if not np.all((boxes[:, 0] >= 0.) & (boxes[:, 0] < boxes[:, 2])):
-            import pdb
-            pdb.set_trace()
+            if not np.all((boxes[:, 0] >= 0.) & (boxes[:, 0] < boxes[:, 2])):
+                import pdb
+                pdb.set_trace()
 
-        assert np.all((boxes[:, 1] >= 0.) & (boxes[:, 1] < boxes[:, 3]))
-        assert np.all((boxes[:, 2] <= w))
-        assert np.all((boxes[:, 3] <= h))
-        instance_dict['boxes_ra'] = ArrayField(boxes, padding_value=-1)
+            assert np.all((boxes[:, 1] >= 0.) & (boxes[:, 1] < boxes[:, 3]))
+            assert np.all((boxes[:, 2] <= w))
+            assert np.all((boxes[:, 3] <= h))
+            instance_dict['boxes_ra'] = ArrayField(boxes, padding_value=-1)
 
         ###########################
 
