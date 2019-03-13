@@ -179,7 +179,19 @@ for epoch_num in range(start_epoch, params['trainer']['num_epochs'] + start_epoc
         
         output_dict_qa = model_qa(batch)
         logits = output_dict_qa['label_logits']
-        output_dict_ra = model_ra(logits, batch) #model_ra(logits, batch_ra_0, batch_ra_1, batch_ra_2, batch_ra_3)
+
+        if b<=100:
+            temperature = 5
+        elif b>100 and b<=200:
+            temperature = 4            
+        elif b>200 and b<=300:
+            temperature = 3            
+        elif b>300 and b<=400:
+            temperature = 2               
+        else:
+            temperature = 1
+
+        output_dict_ra = model_ra(logits, temperature, batch),  #model_ra(logits, batch_ra_0, batch_ra_1, batch_ra_2, batch_ra_3)
 
         loss_qa = output_dict_qa['loss'].mean() + output_dict_qa['cnn_regularization_loss'].mean()
         loss_ra = output_dict_ra['loss'].mean() + output_dict_ra['cnn_regularization_loss'].mean()
