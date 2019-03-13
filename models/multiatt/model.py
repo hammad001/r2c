@@ -318,8 +318,19 @@ class AttentionQRA(Model):
 
         return self.span_encoder(span_rep, span_mask), retrieved_feats
 
+    def sample_gumbel(self, shape, eps=1e-20):
+        U = torch.rand(shape)
+        U = U.cuda()
+        return -torch.log(-torch.log(U + eps) + eps)
+
+
+    def gumbel_softmax_sample(self, logits, temperature):
+         y = logits + self.sample_gumbel(logits.size())
+         return F.softmax(y / temperature, dim=1)
+
     def forward(self,
                 logits: torch.Tensor,
+                temperature,
                 batch_ra) -> Dict[str, torch.Tensor]:
 
         """
@@ -341,7 +352,8 @@ class AttentionQRA(Model):
         # not needed
        
         # Now get the question representations
-        logits = F.softmax(logits, dim=1)
+       # logits = F.softmax(logits, dim=1)
+        logits = self.gumbel_softmax_sample(logits, temperature)
 
         images = batch_ra['images']
         
