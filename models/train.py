@@ -86,7 +86,7 @@ print(f"Using {num_workers} workers out of {NUM_CPUS} possible", flush=True)
 loader_params = {'batch_size': 96 // NUM_GPUS, 'num_gpus':NUM_GPUS, 'num_workers':num_workers}
 
 # Train Loaders
-train_loader_qa = VCRLoader.from_dataset(train[0], **loader_params)
+train_loader_qa = VCRLoader.from_dataset(train, **loader_params)
 train_loader_ra_0 = VCRLoader.from_dataset(train[1], **loader_params)
 train_loader_ra_1 = VCRLoader.from_dataset(train[2], **loader_params)
 train_loader_ra_2 = VCRLoader.from_dataset(train[3], **loader_params)

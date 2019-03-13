@@ -215,15 +215,24 @@ class VCR(Dataset):
     def __getitem__(self, index):
         # if self.split == 'test':
         #     raise ValueError("blind test mode not supported quite yet")
+        #we will have a list of items
         item = deepcopy(self.items[index])
 
         ###################################################################
         # Load questions and answers
-        if self.mode == 'rationale':
-            conditioned_label = self.conditioned_answer_choice
-            item['question'] += item['answer_choices'][conditioned_label]
 
-        answer_choices = item['{}_choices'.format(self.mode)]
+        #assuming item may already have a question
+        item_question = item['question']
+        item_question['question_ra_0'] = item_question + item['answer_choices'][0]        
+        item_question['question_ra_1'] = item_question + item['answer_choices'][1]        
+        item_question['question_ra_2'] = item_question + item['answer_choices'][2]        
+        item_question['question_ra_3'] = item_question + item['answer_choices'][3]
+
+        #self.mode == "rationale" else ""
+
+        answer_choices_qa = item['{}_choices'.format("")]
+        answer_choices_ra = item['{}_choices'.format("rationale")]
+        #???
         dets2use, old_det_to_new_ind = self._get_dets_to_use(item)
 
         ###################################################################
@@ -234,13 +243,12 @@ class VCR(Dataset):
 
         # Essentially we need to condition on the right answer choice here, if we're doing QA->R. We will always
         # condition on the `conditioned_answer_choice.`
-        condition_key = self.conditioned_answer_choice if self.mode == "rationale" else ""
-
+        #for qa
         instance_dict = {}
         if 'endingonly' not in self.embs_to_load:
             questions_tokenized, question_tags = zip(*[_fix_tokenization(
                 item['question'],
-                grp_items[f'ctx_{self.mode}{condition_key}{i}'],
+                grp_items[f'ctx_{i}'],
                 old_det_to_new_ind,
                 item['objects'],
                 token_indexers=self.token_indexers,
@@ -251,17 +259,54 @@ class VCR(Dataset):
 
         answers_tokenized, answer_tags = zip(*[_fix_tokenization(
             answer,
-            grp_items[f'answer_{self.mode}{condition_key}{i}'],
+            grp_items[f'answer_{i}'],
             old_det_to_new_ind,
             item['objects'],
             token_indexers=self.token_indexers,
             pad_ind=0 if self.add_image_as_a_box else -1
-        ) for i, answer in enumerate(answer_choices)])
+        ) for i, answer in enumerate(answer_choices_qa)])
 
         instance_dict['answers'] = ListField(answers_tokenized)
         instance_dict['answer_tags'] = ListField(answer_tags)
+        ####################################################################################
+
+
+        for j in range(4):
+                
+            condition_key = j #self.conditioned_answer_choice if self.mode == "rationale" else ""
+
+            instance_dict = {}
+            if 'endingonly' not in self.embs_to_load:
+                questions_tokenized, question_tags = zip(*[_fix_tokenization(
+                    item['question_ra_{j}'],
+                    grp_items[f'ctx_rationale_{j}{i}'],
+                    old_det_to_new_ind,
+                    item['objects'],
+                    token_indexers=self.token_indexers,
+                    pad_ind=0 if self.add_image_as_a_box else -1
+                ) for i in range(4)])
+                instance_dict['question_ra_{j}'] = ListField(questions_tokenized)
+                instance_dict['question_tags_ra_{j}'] = ListField(question_tags)
+
+            
+        answers_tokenized, answer_tags = zip(*[_fix_tokenization(
+            answer,
+            grp_items[f'answer_rationale0{i}'], #answer_rationale_0=answer_rationale_1=answer_rationale_2=answer_rationale_3 there supposed to be one answer for ra, but supposedly not {j}, see their code
+            old_det_to_new_ind,
+            item['objects'],
+            token_indexers=self.token_indexers,
+            pad_ind=0 if self.add_image_as_a_box else -1
+        ) for i, answer in enumerate(answer_choices_ra)])
+
+        instance_dict['answers_ra'] = ListField(answers_tokenized)
+        instance_dict['answer_tags_ra'] = ListField(answer_tags)
+
+       
         if self.split != 'test':
-            instance_dict['label'] = LabelField(item['{}_label'.format(self.mode)], skip_indexing=True)
+            instance_dict['label'] = LabelField(item['{}_label'.format("")], skip_indexing=True)
+            instance_dict['label_ra'] = LabelField(item['{}_label'.format("rationale")], skip_indexing=True)
+            
+
         instance_dict['metadata'] = MetadataField({'annot_id': item['annot_id'], 'ind': index, 'movie': item['movie'],
                                                    'img_fn': item['img_fn'],
                                                    'question_number': item['question_number']})
@@ -298,8 +343,9 @@ class VCR(Dataset):
         instance_dict['objects'] = ListField([LabelField(x, skip_indexing=True) for x in obj_labels])
 
         if not np.all((boxes[:, 0] >= 0.) & (boxes[:, 0] < boxes[:, 2])):
-            import ipdb
-            ipdb.set_trace()
+            import pdb
+            pdb.set_trace()
+
         assert np.all((boxes[:, 1] >= 0.) & (boxes[:, 1] < boxes[:, 3]))
         assert np.all((boxes[:, 2] <= w))
         assert np.all((boxes[:, 3] <= h))
@@ -321,8 +367,19 @@ def collate_fn(data, to_gpu=False):
         td['question_mask'] = get_text_field_mask(td['question'], num_wrapping_dims=1)
         td['question_tags'][td['question_mask'] == 0] = -2  # Padding
 
+    for i in range(4):
+        if 'question_ra_{i}' in td:
+            td['question_mask_ra_{i}'] = get_text_field_mask(td['question_ra_{i}'], num_wrapping_dims=1)
+            td['question_tags_ra_{i}'][td['question_mask_ra_{i}'] == 0] = -2  # Padding
+    
+    
+
     td['answer_mask'] = get_text_field_mask(td['answers'], num_wrapping_dims=1)
     td['answer_tags'][td['answer_mask'] == 0] = -2
+
+    for i in range(4):
+        td['answer_mask_ra_{i}'] = get_text_field_mask(td['answers_ra_{i}'], num_wrapping_dims=1)
+        td['answer_tags_ra_{i}'][td['answer_mask_ra_{i}'] == 0] = -2
 
     td['box_mask'] = torch.all(td['boxes'] >= 0, -1).long()
     td['images'] = images
