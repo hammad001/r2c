@@ -321,15 +321,15 @@ class VCR(Dataset):
             instance_dict = {}
             if 'endingonly' not in self.embs_to_load:
                 questions_tokenized, question_tags = zip(*[_fix_tokenization(
-                    item_question['question_ra_{j}'],
+                    item_question[f'question_ra_{j}'],
                     grp_items_ra[f'ctx_rationale_{j}{i}'],
                     old_det_to_new_ind_ra,
                     item['objects'],
                     token_indexers=self.token_indexers,
                     pad_ind=0 if self.add_image_as_a_box else -1
                 ) for i in range(4)])
-                instance_dict['question_ra_{j}'] = ListField(questions_tokenized)
-                instance_dict['question_tags_ra_{j}'] = ListField(question_tags)
+                instance_dict[f'question_ra_{j}'] = ListField(questions_tokenized)
+                instance_dict[f'question_tags_ra_{j}'] = ListField(question_tags)
 
             
         answers_tokenized, answer_tags = zip(*[_fix_tokenization(
@@ -441,9 +441,9 @@ def collate_fn(data, to_gpu=False):
         td['question_tags'][td['question_mask'] == 0] = -2  # Padding
 
     for i in range(4):
-        if 'question_ra_{i}' in td:
-            td['question_mask_ra_{i}'] = get_text_field_mask(td['question_ra_{i}'], num_wrapping_dims=1)
-            td['question_tags_ra_{i}'][td['question_mask_ra_{i}'] == 0] = -2  # Padding
+        if f'question_ra_{i}' in td:
+            td[f'question_mask_ra_{i}'] = get_text_field_mask(td[f'question_ra_{i}'], num_wrapping_dims=1)
+            td[f'question_tags_ra_{i}'][td[f'question_mask_ra_{i}'] == 0] = -2  # Padding
     
     
 
@@ -455,6 +455,7 @@ def collate_fn(data, to_gpu=False):
     td['answer_tags_ra'][td['answer_mask_ra'] == 0] = -2
 
     td['box_mask'] = torch.all(td['boxes'] >= 0, -1).long()
+    td['box_mask_ra'] = torch.all(td['boxes_ra'] >= 0, -1).long()
     td['images'] = images
 
     # Deprecated
