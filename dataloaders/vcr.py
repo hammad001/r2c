@@ -222,6 +222,8 @@ class VCR(Dataset):
 
         #assuming item may already have a question
         item_question = item['question']
+        conditioned_label = item['answer_label'] 
+        print(conditioned_label, conditioned_label.type())
         item_question['question_ra_0'] = item_question + item['answer_choices'][0]        
         item_question['question_ra_1'] = item_question + item['answer_choices'][1]        
         item_question['question_ra_2'] = item_question + item['answer_choices'][2]        
