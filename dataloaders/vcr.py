@@ -125,8 +125,8 @@ class VCR(Dataset):
         if split not in ('test', 'train', 'val'):
             raise ValueError("Mode must be in test, train, or val. Supplied {}".format(mode))
 
-        if mode not in ('answer', 'rationale'):
-            raise ValueError("split must be answer or rationale")
+        # if mode not in ('answer', 'rationale'):
+        #     raise ValueError("split must be answer or rationale")
 
         self.token_indexers = {'elmo': ELMoTokenCharactersIndexer()}
         self.vocab = Vocabulary()
