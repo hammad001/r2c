@@ -95,7 +95,7 @@ ARGS_RESET_EVERY = 100
 print("Loading {} ".format(params['model'].get('type', 'WTF?')), flush=True)
 
 model_qa = Model.from_params(vocab=train.vocab, params=params['model'])
-model_ra = Model.from_params(vocab=train.vocab, params=params['model'])
+model_ra = model_qa #Model.from_params(vocab=train.vocab, params=params['model'])
 
 def make_backbone_req_grad_false(model):
     for submodule in model.detector.backbone.modules():
