@@ -393,11 +393,12 @@ class AttentionQRA(Model):
             boxes = boxes[:, :max_len]
             segms = segms[:, :max_len]
            
-            for tag_type, the_tags in (('question', question_tags), ('answer', answer_tags)):
-                if int(the_tags.max()) > max_len:
-                    raise ValueError("Oh no! {}_tags has maximum of {} but objects is of dim {}. Values are\n{}".format(
-                        tag_type, int(the_tags.max()), objects.shape, the_tags
-                    ))
+            tag_type = 'question' 
+            the_tags =  question_tags
+            if int(the_tags.max()) > max_len:
+                raise ValueError("Oh no! {}_tags has maximum of {} but objects is of dim {}. Values are\n{}".format(
+                    tag_type, int(the_tags.max()), objects.shape, the_tags
+                ))
 
             obj_reps = self.detector(images=images, boxes=boxes, box_mask=box_mask, classes=objects, segms=segms)
             
