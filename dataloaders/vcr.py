@@ -96,7 +96,7 @@ def _fix_tokenization(tokenized_sent, bert_embs, old_det_to_new_ind, obj_to_type
 
 
 class VCR(Dataset):
-    def __init__(self, split, mode, only_use_relevant_dets=True, add_image_as_a_box=True, embs_to_load='bert_da',
+    def __init__(self, split, mode=None, only_use_relevant_dets=True, add_image_as_a_box=True, embs_to_load='bert_da',
                  conditioned_answer_choice=0):
         """
 
