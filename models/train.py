@@ -160,10 +160,29 @@ def cal_net_accuracy(qa_preds, qa_label, ra_preds, ra_label):
 
     return qa_acc, ra_acc, np.mean(qar_matches)
 
+def get_temperature(m, c, ep, it):
+    if ep < 2:
+        return m * (ep * len(train_loader) + it) + c
+
+    return 1
+
+# Gumbel Temperature annealing slope
+def gumbel_slope(x2, y2):
+    x1, y1 = 0, 5
+    m = (y2-y1)/(x2-x1)
+    c = y1
+
+    return m, c
+
+gmbl_final_temp = 1
+gmbl_final_epoch = 2
+gmbl_slope, gmbl_intr = gumbel_slope(gmbl_final_epoch*len(train_loader), gmbl_final_temp)
+
 # criterion_ra = torch.nn.CrossEntropyLoss().cuda()
 param_shapes = print_para(model_qa)
 num_batches = 0
 tot_epoch_batch = len(train_loader)
+
 for epoch_num in range(start_epoch, params['trainer']['num_epochs'] + start_epoch):
     train_results = []
     norms = []
@@ -180,18 +199,8 @@ for epoch_num in range(start_epoch, params['trainer']['num_epochs'] + start_epoc
         output_dict_qa = model_qa(batch)
         logits = output_dict_qa['label_logits']
 
-        if b<=100:
-            temperature = 5
-        elif b>100 and b<=200:
-            temperature = 4            
-        elif b>200 and b<=300:
-            temperature = 3            
-        elif b>300 and b<=400:
-            temperature = 2               
-        else:
-            temperature = 1
-
-        output_dict_ra = model_ra(logits, temperature, batch),  #model_ra(logits, batch_ra_0, batch_ra_1, batch_ra_2, batch_ra_3)
+        temperature = get_temperature(gmbl_slope, gmbl_intr, epoch_num, b)
+        output_dict_ra = model_ra(logits, temperature, batch)  #model_ra(logits, batch_ra_0, batch_ra_1, batch_ra_2, batch_ra_3)
 
 
         loss_qa = output_dict_qa['loss'].mean() + output_dict_qa['cnn_regularization_loss'].mean()
@@ -263,7 +272,7 @@ for epoch_num in range(start_epoch, params['trainer']['num_epochs'] + start_epoc
             output_dict_qa = model_qa(batch)
             
             logits = output_dict_qa['label_logits']
-            output_dict_ra = model_ra(logits, batch)
+            output_dict_ra = model_ra(logits, gmbl_final_temp, batch)
         
             loss_qa = output_dict_qa['loss'].mean().item() * batch['label'].shape[0] 
             
@@ -334,7 +343,7 @@ for b, (time_per_batch, batch) in enumerate(time_batch(val_loader)):
         output_dict_qa = model_qa(batch)
 
         logits = output_dict_qa['label_logits']
-        output_dict_ra = model_ra(logits, batch)
+        output_dict_ra = model_ra(logits, gmbl_final_temp, batch)
 
         val_probs_qa.append(output_dict_qa['label_probs'].detach().cpu().numpy())
         val_probs_ra.append(output_dict_ra['label_probs'].detach().cpu().numpy())

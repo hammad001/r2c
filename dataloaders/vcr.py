@@ -141,6 +141,7 @@ class VCR(Dataset):
         self.h5fn_ra = os.path.join(VCR_ANNOTS_DIR, f'{self.embs_to_load}_rationale_{self.split}.h5')
         print("Loading embeddings from {}".format(self.h5fn), flush=True)
         print("Loading embeddings from {}".format(self.h5fn_ra), flush=True)
+    
     @property
     def is_train(self):
         return self.split == 'train'
