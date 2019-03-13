@@ -326,8 +326,10 @@ class AttentionQRA(Model):
 
 
     def gumbel_softmax_sample(self, logits, temperature):
-        y = logits + self.sample_gumbel(logits.size())
-        return F.softmax(y / temperature, dim=-1)
+
+         y = logits + self.sample_gumbel(logits.size())
+         return F.softmax(y / temperature, dim=1)
+
 
     def forward(self,
                 logits: torch.Tensor,
@@ -353,9 +355,13 @@ class AttentionQRA(Model):
         # not needed
        
         # Now get the question representations
+<<<<<<< HEAD
         #Gumble softmax
 
 
+=======
+       # logits = F.softmax(logits, dim=1)
+>>>>>>> loader
         logits = self.gumbel_softmax_sample(logits, temperature)
 
         images = batch_ra['images']
