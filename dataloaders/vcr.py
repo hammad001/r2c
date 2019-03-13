@@ -379,9 +379,9 @@ def collate_fn(data, to_gpu=False):
     td['answer_mask'] = get_text_field_mask(td['answers'], num_wrapping_dims=1)
     td['answer_tags'][td['answer_mask'] == 0] = -2
 
-    for i in range(4):
-        td['answer_mask_ra_{i}'] = get_text_field_mask(td['answers_ra_{i}'], num_wrapping_dims=1)
-        td['answer_tags_ra_{i}'][td['answer_mask_ra_{i}'] == 0] = -2
+ 
+    td['answer_mask_ra'] = get_text_field_mask(td['answers_ra'], num_wrapping_dims=1)
+    td['answer_tags_ra'][td['answer_mask_ra'] == 0] = -2
 
     td['box_mask'] = torch.all(td['boxes'] >= 0, -1).long()
     td['images'] = images
