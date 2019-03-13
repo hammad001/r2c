@@ -181,7 +181,47 @@ class VCR(Dataset):
         """
         # Load questions and answers
         question = item['question']
-        answer_choices = item['{}_choices'.format(self.mode)]
+        answer_choices = item['{}_choices'.format("answer")]
+
+        if self.only_use_relevant_dets:
+            dets2use = np.zeros(len(item['objects']), dtype=bool)
+            people = np.array([x == 'person' for x in item['objects']], dtype=bool)
+            for sent in answer_choices + [question]:
+                for possibly_det_list in sent:
+                    if isinstance(possibly_det_list, list):
+                        for tag in possibly_det_list:
+                            if tag >= 0 and tag < len(item['objects']):  # sanity check
+                                dets2use[tag] = True
+                    elif possibly_det_list.lower() in ('everyone', 'everyones'):
+                        dets2use |= people
+            if not dets2use.any():
+                dets2use |= people
+        else:
+            dets2use = np.ones(len(item['objects']), dtype=bool)
+
+        # we will use these detections
+        dets2use = np.where(dets2use)[0]
+
+        old_det_to_new_ind = np.zeros(len(item['objects']), dtype=np.int32) - 1
+        old_det_to_new_ind[dets2use] = np.arange(dets2use.shape[0], dtype=np.int32)
+
+        # If we add the image as an extra box then the 0th will be the image.
+        if self.add_image_as_a_box:
+            old_det_to_new_ind[dets2use] += 1
+        old_det_to_new_ind = old_det_to_new_ind.tolist()
+        return dets2use, old_det_to_new_ind
+
+    def _get_dets_to_use_ra(self, item):
+        """
+        We might want to use fewer detectiosn so lets do so.
+        :param item:
+        :param question:
+        :param answer_choices:
+        :return:
+        """
+        # Load questions and answers
+        question = item['question']
+        answer_choices = item['{}_choices'.format("rationale")]
 
         if self.only_use_relevant_dets:
             dets2use = np.zeros(len(item['objects']), dtype=bool)
@@ -233,6 +273,7 @@ class VCR(Dataset):
         answer_choices_ra = item['{}_choices'.format("rationale")]
         #???
         dets2use, old_det_to_new_ind = self._get_dets_to_use(item)
+        dets2use_ra, old_det_to_new_ind_ra = self._get_dets_to_use_ra(item)
 
         ###################################################################
         # Load in BERT. We'll get contextual representations of the context and the answer choices
@@ -282,7 +323,7 @@ class VCR(Dataset):
                 questions_tokenized, question_tags = zip(*[_fix_tokenization(
                     item_question['question_ra_{j}'],
                     grp_items_ra[f'ctx_rationale_{j}{i}'],
-                    old_det_to_new_ind,
+                    old_det_to_new_ind_ra,
                     item['objects'],
                     token_indexers=self.token_indexers,
                     pad_ind=0 if self.add_image_as_a_box else -1
@@ -294,7 +335,7 @@ class VCR(Dataset):
         answers_tokenized, answer_tags = zip(*[_fix_tokenization(
             answer,
             grp_items_ra[f'answer_rationale0{i}'], #answer_rationale_0=answer_rationale_1=answer_rationale_2=answer_rationale_3 there supposed to be one answer for ra, but supposedly not {j}, see their code
-            old_det_to_new_ind,
+            old_det_to_new_ind_ra,
             item['objects'],
             token_indexers=self.token_indexers,
             pad_ind=0 if self.add_image_as_a_box else -1
@@ -352,6 +393,36 @@ class VCR(Dataset):
         assert np.all((boxes[:, 2] <= w))
         assert np.all((boxes[:, 3] <= h))
         instance_dict['boxes'] = ArrayField(boxes, padding_value=-1)
+
+        ###############################
+        segms = np.stack([make_mask(mask_size=14, box=metadata['boxes'][i], polygons_list=metadata['segms'][i])
+                          for i in dets2use_ra])
+
+        # Chop off the final dimension, that's the confidence
+        boxes = np.array(metadata['boxes'])[dets2use_ra, :-1]
+        # Possibly rescale them if necessary
+        boxes *= img_scale
+        boxes[:, :2] += np.array(padding[:2])[None]
+        boxes[:, 2:] += np.array(padding[:2])[None]
+        obj_labels = [self.coco_obj_to_ind[item['objects'][i]] for i in dets2use.tolist()]
+        if self.add_image_as_a_box:
+            boxes = np.row_stack((window, boxes))
+            segms = np.concatenate((np.ones((1, 14, 14), dtype=np.float32), segms), 0)
+            obj_labels = [self.coco_obj_to_ind['__background__']] + obj_labels
+
+        instance_dict['segms_ra'] = ArrayField(segms, padding_value=0)
+        instance_dict['objects_ra'] = ListField([LabelField(x, skip_indexing=True) for x in obj_labels])
+
+        if not np.all((boxes[:, 0] >= 0.) & (boxes[:, 0] < boxes[:, 2])):
+            import pdb
+            pdb.set_trace()
+
+        assert np.all((boxes[:, 1] >= 0.) & (boxes[:, 1] < boxes[:, 3]))
+        assert np.all((boxes[:, 2] <= w))
+        assert np.all((boxes[:, 3] <= h))
+        instance_dict['boxes_ra'] = ArrayField(boxes, padding_value=-1)
+
+        ###########################
 
         instance = Instance(instance_dict)
         instance.index_fields(self.vocab)
