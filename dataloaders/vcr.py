@@ -137,7 +137,7 @@ class VCR(Dataset):
         self.coco_obj_to_ind = {o: i for i, o in enumerate(self.coco_objects)}
 
         self.embs_to_load = embs_to_load
-        self.h5fn = os.path.join(VCR_ANNOTS_DIR, f'{self.embs_to_load}_{self.split}.h5')
+        self.h5fn = os.path.join(VCR_ANNOTS_DIR, f'{self.embs_to_load}_answer_{self.split}.h5')
         self.h5fn_ra = os.path.join(VCR_ANNOTS_DIR, f'{self.embs_to_load}_rationale_{self.split}.h5')
         print("Loading embeddings from {}".format(self.h5fn), flush=True)
 
@@ -229,7 +229,7 @@ class VCR(Dataset):
 
         #self.mode == "rationale" else ""
 
-        answer_choices_qa = item['{}_choices'.format("")]
+        answer_choices_qa = item['{}_choices'.format("answer")]
         answer_choices_ra = item['{}_choices'.format("rationale")]
         #???
         dets2use, old_det_to_new_ind = self._get_dets_to_use(item)
@@ -250,7 +250,7 @@ class VCR(Dataset):
         if 'endingonly' not in self.embs_to_load:
             questions_tokenized, question_tags = zip(*[_fix_tokenization(
                 item['question'],
-                grp_items[f'ctx_{i}'],
+                grp_items[f'ctx_answer{i}'],
                 old_det_to_new_ind,
                 item['objects'],
                 token_indexers=self.token_indexers,
@@ -261,7 +261,7 @@ class VCR(Dataset):
 
         answers_tokenized, answer_tags = zip(*[_fix_tokenization(
             answer,
-            grp_items[f'answer_{i}'],
+            grp_items[f'answer_answer{i}'],
             old_det_to_new_ind,
             item['objects'],
             token_indexers=self.token_indexers,
@@ -305,7 +305,7 @@ class VCR(Dataset):
 
        
         if self.split != 'test':
-            instance_dict['label'] = LabelField(item['{}_label'.format("")], skip_indexing=True)
+            instance_dict['label'] = LabelField(item['{}_label'.format("answer")], skip_indexing=True)
             instance_dict['label_ra'] = LabelField(item['{}_label'.format("rationale")], skip_indexing=True)
             
 
