@@ -124,8 +124,8 @@ if os.path.exists(args.folder):
     print("Found folder! restoring", flush=True)
     start_epoch, val_metric_per_epoch = restore_checkpoint(model_qa, 'qa', optimizer, serialization_dir=args.folder,
                                                            learning_rate_scheduler=scheduler)
-    # start_epoch, val_metric_per_epoch = restore_checkpoint(model_ra, 'ra', optimizer, serialization_dir=args.folder,
-    #                                                        learning_rate_scheduler=scheduler)
+    start_epoch, val_metric_per_epoch = restore_checkpoint(model_ra, 'ra', optimizer, serialization_dir=args.folder,
+                                                           learning_rate_scheduler=scheduler)
    
 else:
     print("Making directories")
@@ -280,8 +280,8 @@ for epoch_num in range(start_epoch, params['trainer']['num_epochs'] + start_epoc
     val_loss_avg_ra = val_loss_sum_ra / val_labels_ra.shape[0]
     val_loss_avg_qar = val_loss_sum_qar / val_labels_qa.shape[0]
 
-    log_tensorboard('val', epoch_num * tot_epoch_batch, val_loss_avg_qa.detach().cpu().item(), val_loss_avg_ra.detach().cpu().item(), 
-                         val_loss_avg_qar.detach().cpu().item(), qa_accuracy, ra_accuracy, qar_accuracy)
+    log_tensorboard('val', epoch_num * tot_epoch_batch, val_loss_avg_qa, val_loss_avg_ra, 
+                         val_loss_avg_qar, qa_accuracy, ra_accuracy, qar_accuracy)
 
 
     val_metric_per_epoch.append(qar_accuracy)
