@@ -320,7 +320,6 @@ class VCR(Dataset):
             
             _, old_det_to_new_ind_ra = self._get_dets_to_use_ra(item, item_question[f'question_ra_{j}'])
 
-            instance_dict = {}
             if 'endingonly' not in self.embs_to_load:
                 questions_tokenized, question_tags = zip(*[_fix_tokenization(
                     item_question[f'question_ra_{j}'],
