@@ -343,11 +343,7 @@ class AttentionQRA(Model):
         # Now get the question representations
 
         images = batch_ra['images']
-        objects = batch_ra['objects_ra']
-        segms =  batch_ra['segms_ra']
-        boxes = batch_ra['boxes_ra']
-        box_mask = batch_ra['box_mask_ra']
-
+        
         # answer_tags = batch_ra['answer_tags']
         # answers = batch_ra['answers']
         # answer_mask = batch_ra['answer_mask']
@@ -364,6 +360,11 @@ class AttentionQRA(Model):
         # label = batch_ra['label']
         label = batch_ra['label_ra']
 
+        objects = batch_ra[f'objects_ra']
+        segms =  batch_ra[f'segms_ra']
+        boxes = batch_ra[f'boxes_ra']
+        box_mask = batch_ra[f'box_mask_ra']
+
         max_len = int(box_mask.sum(1).max().item())
         objects = objects[:, :max_len]
         box_mask = box_mask[:, :max_len]
@@ -375,16 +376,29 @@ class AttentionQRA(Model):
         
         for i in range(4):
             
+            objects = batch_ra[f'objects_ra_{i}']
+            segms =  batch_ra[f'segms_ra_{i}']
+            boxes = batch_ra[f'boxes_ra_{i}']
+            box_mask = batch_ra[f'box_mask_ra_{i}']
+            
             question = batch_ra[f'question_ra_{i}']
             question_tags = batch_ra[f'question_tags_ra_{i}']
             question_mask = batch_ra[f'question_mask_ra_{i}']
-            
+ 
+            max_len = int(box_mask.sum(1).max().item())
+            objects = objects[:, :max_len]
+            box_mask = box_mask[:, :max_len]
+            boxes = boxes[:, :max_len]
+            segms = segms[:, :max_len]
+           
             for tag_type, the_tags in (('question', question_tags), ('answer', answer_tags)):
                 if int(the_tags.max()) > max_len:
                     raise ValueError("Oh no! {}_tags has maximum of {} but objects is of dim {}. Values are\n{}".format(
                         tag_type, int(the_tags.max()), objects.shape, the_tags
                     ))
 
+            obj_reps = self.detector(images=images, boxes=boxes, box_mask=box_mask, classes=objects, segms=segms)
+            
             q_rep, _ = self.embed_span(question, question_tags, question_mask, obj_reps['obj_reps'])
             
             ####################################
