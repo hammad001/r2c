@@ -118,7 +118,7 @@ def find_latest_checkpoint(serialization_dir, mode):
         return None
 
     serialization_files = os.listdir(serialization_dir)
-    model_checkpoints = [x for x in serialization_files if "model_{mode}_state_epoch" in x]
+    model_checkpoints = [x for x in serialization_files if f"model_{mode}_state_epoch" in x]
     # Get the last checkpoint file.  Epochs are specified as either an
     # int (for end of epoch files) or with epoch and timestamp for
     # within epoch checkpoints, e.g. 5.2018-02-02-15-33-42
