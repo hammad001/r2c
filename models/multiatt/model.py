@@ -355,13 +355,11 @@ class AttentionQRA(Model):
         # not needed
        
         # Now get the question representations
-<<<<<<< HEAD
         #Gumble softmax
 
 
-=======
        # logits = F.softmax(logits, dim=1)
->>>>>>> loader
+
         logits = self.gumbel_softmax_sample(logits, temperature)
 
         images = batch_ra['images']
