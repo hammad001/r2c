@@ -140,7 +140,7 @@ class VCR(Dataset):
         self.h5fn = os.path.join(VCR_ANNOTS_DIR, f'{self.embs_to_load}_answer_{self.split}.h5')
         self.h5fn_ra = os.path.join(VCR_ANNOTS_DIR, f'{self.embs_to_load}_rationale_{self.split}.h5')
         print("Loading embeddings from {}".format(self.h5fn), flush=True)
-
+        print("Loading embeddings from {}".format(self.h5fn_ra), flush=True)
     @property
     def is_train(self):
         return self.split == 'train'
@@ -322,7 +322,7 @@ class VCR(Dataset):
             if 'endingonly' not in self.embs_to_load:
                 questions_tokenized, question_tags = zip(*[_fix_tokenization(
                     item_question[f'question_ra_{j}'],
-                    grp_items_ra[f'ctx_rationale_{j}{i}'],
+                    grp_items_ra[f'ctx_rationale{j}{i}'],
                     old_det_to_new_ind_ra,
                     item['objects'],
                     token_indexers=self.token_indexers,
