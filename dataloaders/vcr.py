@@ -414,8 +414,8 @@ class VCR(Dataset):
                 segms = np.concatenate((np.ones((1, 14, 14), dtype=np.float32), segms), 0)
                 obj_labels = [self.coco_obj_to_ind['__background__']] + obj_labels
 
-            instance_dict['segms_ra'] = ArrayField(segms, padding_value=0)
-            instance_dict['objects_ra'] = ListField([LabelField(x, skip_indexing=True) for x in obj_labels])
+            instance_dict[f'segms_ra_{j}'] = ArrayField(segms, padding_value=0)
+            instance_dict[f'objects_ra_{j}'] = ListField([LabelField(x, skip_indexing=True) for x in obj_labels])
 
             if not np.all((boxes[:, 0] >= 0.) & (boxes[:, 0] < boxes[:, 2])):
                 import pdb
@@ -424,10 +424,42 @@ class VCR(Dataset):
             assert np.all((boxes[:, 1] >= 0.) & (boxes[:, 1] < boxes[:, 3]))
             assert np.all((boxes[:, 2] <= w))
             assert np.all((boxes[:, 3] <= h))
-            instance_dict['boxes_ra'] = ArrayField(boxes, padding_value=-1)
+            instance_dict[f'boxes_ra_{j}'] = ArrayField(boxes, padding_value=-1)
 
         ###########################
 
+        self.only_use_relevant_dets = False
+        dets2use_ra, _ = self._get_dets_to_use_ra(item, item_question['question_ra_0']) # does not matter what question_ra is being used, we return all
+
+        segms = np.stack([make_mask(mask_size=14, box=metadata['boxes'][i], polygons_list=metadata['segms'][i])
+                            for i in dets2use_ra])
+
+        # Chop off the final dimension, that's the confidenceimage
+        boxes = np.array(metadata['boxes'])[dets2use_ra, :-1]
+        # Possibly rescale them if necessary
+        boxes *= img_scale
+        boxes[:, :2] += np.array(padding[:2])[None]
+        boxes[:, 2:] += np.array(padding[:2])[None]
+        obj_labels = [self.coco_obj_to_ind[item['objects'][i]] for i in dets2use.tolist()]
+        if self.add_image_as_a_box:
+            boxes = np.row_stack((window, boxes))
+            segms = np.concatenate((np.ones((1, 14, 14), dtype=np.float32), segms), 0)
+            obj_labels = [self.coco_obj_to_ind['__background__']] + obj_labels
+
+        instance_dict['segms_ra'] = ArrayField(segms, padding_value=0)
+        instance_dict['objects_ra'] = ListField([LabelField(x, skip_indexing=True) for x in obj_labels])
+
+        if not np.all((boxes[:, 0] >= 0.) & (boxes[:, 0] < boxes[:, 2])):
+            import pdb
+            pdb.set_trace()
+
+        assert np.all((boxes[:, 1] >= 0.) & (boxes[:, 1] < boxes[:, 3]))
+        assert np.all((boxes[:, 2] <= w))
+        assert np.all((boxes[:, 3] <= h))
+        instance_dict['boxes_ra'] = ArrayField(boxes, padding_value=-1)
+
+
+        #############################
         instance = Instance(instance_dict)
         instance.index_fields(self.vocab)
         return image, instance
@@ -443,23 +475,24 @@ def collate_fn(data, to_gpu=False):
     if 'question' in td:
         td['question_mask'] = get_text_field_mask(td['question'], num_wrapping_dims=1)
         td['question_tags'][td['question_mask'] == 0] = -2  # Padding
+    
+    td['box_mask'] = torch.all(td['boxes'] >= 0, -1).long()
 
     for i in range(4):
         if f'question_ra_{i}' in td:
             td[f'question_mask_ra_{i}'] = get_text_field_mask(td[f'question_ra_{i}'], num_wrapping_dims=1)
             td[f'question_tags_ra_{i}'][td[f'question_mask_ra_{i}'] == 0] = -2  # Padding
-    
-    
+
+        td[f'box_mask_ra_{i}'] = torch.all(td[f'boxes_ra_{i}'] >= 0, -1).long()
+
+    td['box_mask_ra'] = torch.all(td['boxes_ra'] >= 0, -1).long()
 
     td['answer_mask'] = get_text_field_mask(td['answers'], num_wrapping_dims=1)
     td['answer_tags'][td['answer_mask'] == 0] = -2
 
- 
     td['answer_mask_ra'] = get_text_field_mask(td['answers_ra'], num_wrapping_dims=1)
     td['answer_tags_ra'][td['answer_mask_ra'] == 0] = -2
 
-    td['box_mask'] = torch.all(td['boxes'] >= 0, -1).long()
-    td['box_mask_ra'] = torch.all(td['boxes_ra'] >= 0, -1).long()
     td['images'] = images
 
     # Deprecated

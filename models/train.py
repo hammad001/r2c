@@ -89,13 +89,13 @@ loader_params = {'batch_size': 96 // NUM_GPUS, 'num_gpus':NUM_GPUS, 'num_workers
 train_loader = VCRLoader.from_dataset(train, **loader_params)
 
 # Val Loaders
-val_loader_qa = VCRLoader.from_dataset(val, **loader_params)
+val_loader = VCRLoader.from_dataset(val, **loader_params)
 
 ARGS_RESET_EVERY = 100
 print("Loading {} ".format(params['model'].get('type', 'WTF?')), flush=True)
 
 model_qa = Model.from_params(vocab=train.vocab, params=params['model'])
-model_ra = model_qa #Model.from_params(vocab=train.vocab, params=params['model'])
+model_ra = Model.from_params(vocab=train.vocab, params=params['model_ra'])
 
 def make_backbone_req_grad_false(model):
     for submodule in model.detector.backbone.modules():
@@ -124,8 +124,8 @@ if os.path.exists(args.folder):
     print("Found folder! restoring", flush=True)
     start_epoch, val_metric_per_epoch = restore_checkpoint(model_qa, 'qa', optimizer, serialization_dir=args.folder,
                                                            learning_rate_scheduler=scheduler)
-    start_epoch, val_metric_per_epoch = restore_checkpoint(model_ra, 'ra', optimizer, serialization_dir=args.folder,
-                                                           learning_rate_scheduler=scheduler)
+    # start_epoch, val_metric_per_epoch = restore_checkpoint(model_ra, 'ra', optimizer, serialization_dir=args.folder,
+    #                                                        learning_rate_scheduler=scheduler)
    
 else:
     print("Making directories")
@@ -160,7 +160,7 @@ def cal_net_accuracy(qa_preds, qa_label, ra_preds, ra_label):
 
     return qa_acc, ra_acc, np.mean(qar_matches)
 
-criterion_ra = torch.nn.CrossEntropyLoss().cuda()
+# criterion_ra = torch.nn.CrossEntropyLoss().cuda()
 param_shapes = print_para(model_qa)
 num_batches = 0
 tot_epoch_batch = len(train_loader)
@@ -174,232 +174,174 @@ for epoch_num in range(start_epoch, params['trainer']['num_epochs'] + start_epoc
     for b, (time_per_batch, batch) in enumerate(time_batch(train_loader if args.no_tqdm else tqdm(train_loader), reset_every=ARGS_RESET_EVERY)):
         
         batch = _to_gpu(batch)
-        print(batch.size())
-
-        # try:
-        #     batch_ra_0 = train_loader_ra_0_iter.next()
-        #     batch_ra_1 = train_loader_ra_1_iter.next()
-        #     batch_ra_2 = train_loader_ra_2_iter.next()
-        #     batch_ra_3 = train_loader_ra_3_iter.next()
-        # except StopIteration:
-        #     train_loader_ra_0_iter = iter(train_loader_ra_0)
-        #     train_loader_ra_1_iter = iter(train_loader_ra_1)
-        #     train_loader_ra_2_iter = iter(train_loader_ra_2)
-        #     train_loader_ra_3_iter = iter(train_loader_ra_3)
-            
-        #     batch_ra_0 = train_loader_ra_0_iter.next()
-        #     batch_ra_1 = train_loader_ra_1_iter.next()
-        #     batch_ra_2 = train_loader_ra_2_iter.next()
-        #     batch_ra_3 = train_loader_ra_3_iter.next()
-
-        # batch_ra_0, batch_ra_1, batch_ra_2, batch_ra_3 = _to_gpu(batch_ra_0), _to_gpu(batch_ra_1), _to_gpu(batch_ra_2), _to_gpu(batch_ra_3)
         
-        # optimizer.zero_grad()
+        optimizer.zero_grad()
         
-        # output_dict_qa = model_qa(**batch_qa)
-        # logits = output_dict_qa['label_logits']
-        # output_dict_ra = model_qa(**batch_ra_0) #model_ra(logits, batch_ra_0, batch_ra_1, batch_ra_2, batch_ra_3)
+        output_dict_qa = model_qa(batch)
+        logits = output_dict_qa['label_logits']
+        output_dict_ra = model_ra(logits, batch) #model_ra(logits, batch_ra_0, batch_ra_1, batch_ra_2, batch_ra_3)
 
-        # loss_qa = output_dict_qa['loss'].mean() + output_dict_qa['cnn_regularization_loss'].mean()
-        # loss_ra = output_dict_ra['loss'].mean() + output_dict_ra['cnn_regularization_loss'].mean()
+        loss_qa = output_dict_qa['loss'].mean() + output_dict_qa['cnn_regularization_loss'].mean()
+        loss_ra = output_dict_ra['loss'].mean() + output_dict_ra['cnn_regularization_loss'].mean()
 
-        # # QA loss: RA loss ratio is 4:16 since qa chooses out of 4 choices while ra chooses out of 16 choices
-        # loss = (4/20) * loss_qa + (16/20) * loss_ra
+        # QA loss: RA loss ratio is 4:16 since qa chooses out of 4 choices while ra chooses out of 16 choices
+        loss = (4/20) * loss_qa + (16/20) * loss_ra
 
-        # loss.backward()
+        loss.backward()
 
-        # num_batches += 1
-        # if scheduler:
-        #     scheduler.step_batch(num_batches)
+        num_batches += 1
+        if scheduler:
+            scheduler.step_batch(num_batches)
 
-        # norms.append(
-        #     clip_grad_norm(list(model_qa.named_parameters()) + list(model_ra.named_parameters()),
-        #         max_norm=params['trainer']['grad_norm'], clip=True, verbose=False)
-        # )
-        # optimizer.step()
+        norms.append(
+            clip_grad_norm(list(model_qa.named_parameters()) + list(model_ra.named_parameters()),
+                max_norm=params['trainer']['grad_norm'], clip=True, verbose=False)
+        )
+        optimizer.step()
 
-        # qa_label = batch_qa['label']
-        # ra_label = batch_ra_0['label']
+        qa_label = batch['label']
+        ra_label = batch['label_ra']
 
-        # qa_accuracy, ra_accuracy, qar_accuracy = cal_net_accuracy(output_dict_qa['label_probs'].detach().cpu().numpy(),
-        #                                                    qa_label.detach().cpu().numpy(),
-        #                                                    output_dict_ra['label_probs'].detach().cpu().numpy(),
-        #                                                    ra_label.detach().cpu().numpy())
+        qa_accuracy, ra_accuracy, qar_accuracy = cal_net_accuracy(output_dict_qa['label_probs'].detach().cpu().numpy(),
+                                                           qa_label.detach().cpu().numpy(),
+                                                           output_dict_ra['label_probs'].detach().cpu().numpy(),
+                                                           ra_label.detach().cpu().numpy())
         
-        # log_tensorboard('train', epoch_num * tot_epoch_batch, loss_qa.detach().cpu().item(), loss_ra.detach().cpu().item(), 
-        #                  loss.detach().cpu().item(), qa_accuracy, ra_accuracy, qar_accuracy)
+        log_tensorboard('train', epoch_num * tot_epoch_batch, loss_qa.detach().cpu().item(), loss_ra.detach().cpu().item(), 
+                         loss.detach().cpu().item(), qa_accuracy, ra_accuracy, qar_accuracy)
         
-        # train_results.append(pd.Series({'loss_qa': loss_qa.detach().cpu().item(),
-        #                                 'loss_ra': loss_ra.detach().cpu().item(),
-        #                                 'net_loss': loss.detach().cpu().item(),
-        #                                 'accuracy_qa': qa_accuracy,
-        #                                 'accuracy_ra': ra_accuracy,
-        #                                 'net_accuracy': qar_accuracy,
-        #                                 'sec_per_batch': time_per_batch,
-        #                                 'hr_per_epoch': len(train_loader_qa) * time_per_batch / 3600,
-        #                                 }))
-        # if b % ARGS_RESET_EVERY == 0 and b > 0:
-        #     norms_df = pd.DataFrame(pd.DataFrame(norms[-ARGS_RESET_EVERY:]).mean(), columns=['norm']).join(
-        #         param_shapes[['shape', 'size']]).sort_values('norm', ascending=False)
+        train_results.append(pd.Series({'loss_qa': loss_qa.detach().cpu().item(),
+                                        'loss_ra': loss_ra.detach().cpu().item(),
+                                        'net_loss': loss.detach().cpu().item(),
+                                        'accuracy_qa': qa_accuracy,
+                                        'accuracy_ra': ra_accuracy,
+                                        'net_accuracy': qar_accuracy,
+                                        'sec_per_batch': time_per_batch,
+                                        'hr_per_epoch': len(train_loader) * time_per_batch / 3600,
+                                        }))
+        if b % ARGS_RESET_EVERY == 0 and b > 0:
+            norms_df = pd.DataFrame(pd.DataFrame(norms[-ARGS_RESET_EVERY:]).mean(), columns=['norm']).join(
+                param_shapes[['shape', 'size']]).sort_values('norm', ascending=False)
 
-        #     print("e{:2d}b{:5d}/{:5d}. norms: \n{}\nsumm:\n{}\n~~~~~~~~~~~~~~~~~~\n".format(
-        #         epoch_num, b, len(train_loader_qa),
-        #         norms_df.to_string(formatters={'norm': '{:.2f}'.format}),
-        #         pd.DataFrame(train_results[-ARGS_RESET_EVERY:]).mean(),
-        #     ), flush=True)
+            print("e{:2d}b{:5d}/{:5d}. norms: \n{}\nsumm:\n{}\n~~~~~~~~~~~~~~~~~~\n".format(
+                epoch_num, b, len(train_loader),
+                norms_df.to_string(formatters={'norm': '{:.2f}'.format}),
+                pd.DataFrame(train_results[-ARGS_RESET_EVERY:]).mean(),
+            ), flush=True)
 
     print("---\nTRAIN EPOCH {:2d}:\n{}\n----".format(epoch_num, pd.DataFrame(train_results).mean()))
-#     val_probs_qa = []
-#     val_probs_ra = []
-#     val_labels_qa = []
-#     val_labels_ra = []
-#     val_loss_sum_qa = 0.0
-#     val_loss_sum_ra = 0.0
-#     val_loss_sum_qar = 0.0
+    val_probs_qa = []
+    val_probs_ra = []
+    val_labels_qa = []
+    val_labels_ra = []
+    val_loss_sum_qa = 0.0
+    val_loss_sum_ra = 0.0
+    val_loss_sum_qar = 0.0
     
-#     model_qa.eval()
-#     model_ra.eval()
+    model_qa.eval()
+    model_ra.eval()
     
-#     val_loader_ra_0_iter = iter(val_loader_ra_0)
-#     val_loader_ra_1_iter = iter(val_loader_ra_1)
-#     val_loader_ra_2_iter = iter(val_loader_ra_2)
-#     val_loader_ra_3_iter = iter(val_loader_ra_3)
 
-#     for b, (time_per_batch, batch_qa) in enumerate(time_batch(val_loader_qa)):
-#         with torch.no_grad():
-#             batch_qa = _to_gpu(batch_qa)
+
+    for b, (time_per_batch, batch) in enumerate(time_batch(val_loader)):
+        with torch.no_grad():
+            batch = _to_gpu(batch)
+    
+            output_dict_qa = model_qa(batch)
             
-#             try:
-#                 batch_ra_0 = val_loader_ra_0_iter.next()
-#                 batch_ra_1 = val_loader_ra_1_iter.next()
-#                 batch_ra_2 = val_loader_ra_2_iter.next()
-#                 batch_ra_3 = val_loader_ra_3_iter.next()
-#             except StopIteration:
-#                 val_loader_ra_0_iter = iter(val_loader_ra_0)
-#                 val_loader_ra_1_iter = iter(val_loader_ra_1)
-#                 val_loader_ra_2_iter = iter(val_loader_ra_2)
-#                 val_loader_ra_3_iter = iter(val_loader_ra_3)
-                
-#                 batch_ra_0 = val_loader_ra_0_iter.next()
-#                 batch_ra_1 = val_loader_ra_1_iter.next()
-#                 batch_ra_2 = val_loader_ra_2_iter.next()
-#                 batch_ra_3 = val_loader_ra_3_iter.next()
-    
-#             batch_ra_0, batch_ra_1, batch_ra_2, batch_ra_3 = _to_gpu(batch_ra_0), _to_gpu(batch_ra_1), _to_gpu(batch_ra_2), _to_gpu(batch_ra_3)
-
-#             output_dict_qa = model_qa(**batch_qa)
-#             output_dict_ra = model_ra(batch_ra_0, batch_ra_1, batch_ra_2, batch_ra_3)
+            logits = output_dict_qa['label_logits']
+            output_dict_ra = model_ra(logits, batch)
         
-#             loss_qa = output_dict_qa['loss'].mean().item() * batch_qa['label'].shape[0] 
+            loss_qa = output_dict_qa['loss'].mean().item() * batch['label'].shape[0] 
             
-#             val_loss_sum_qa += loss_qa
+            val_loss_sum_qa += loss_qa
 
-#             loss_ra = output_dict_ra['loss'].mean().item() * batch_ra_0['label'].shape[0] 
-#             val_loss_sum_ra += loss_ra
+            loss_ra = output_dict_ra['loss'].mean().item() * batch['label_ra'].shape[0] 
+            val_loss_sum_ra += loss_ra
 
-#             val_loss_sum_qar += (4/20) * loss_qa + (16/20) * loss_ra
-#             qa_label = batch_qa['label']
-#             ra_label = batch_ra_0['label']
+            val_loss_sum_qar += (4/20) * loss_qa + (16/20) * loss_ra
+            qa_label = batch['label']
+            ra_label = batch['label_ra']
 
-#             val_probs_qa.append(output_dict_qa['label_probs'].detach().cpu().numpy())
-#             val_probs_ra.append(output_dict_ra['label_probs'].detach().cpu().numpy())
-#             val_labels_qa.append(qa_label.detach().cpu().numpy())
-#             val_labels_ra.append(ra_label.detach().cpu().numpy())
+            val_probs_qa.append(output_dict_qa['label_probs'].detach().cpu().numpy())
+            val_probs_ra.append(output_dict_ra['label_probs'].detach().cpu().numpy())
+            val_labels_qa.append(qa_label.detach().cpu().numpy())
+            val_labels_ra.append(ra_label.detach().cpu().numpy())
 
-#     val_labels_qa = np.concatenate(val_labels_qa, 0)
-#     val_labels_ra = np.concatenate(val_labels_ra, 0)
-#     val_probs_qa = np.concatenate(val_probs_qa, 0)
-#     val_probs_ra = np.concatenate(val_probs_ra, 0)
+    val_labels_qa = np.concatenate(val_labels_qa, 0)
+    val_labels_ra = np.concatenate(val_labels_ra, 0)
+    val_probs_qa = np.concatenate(val_probs_qa, 0)
+    val_probs_ra = np.concatenate(val_probs_ra, 0)
     
-#     qa_accuracy, ra_accuracy, qar_accuracy = cal_net_accuracy(val_probs_qa, val_labels_qa,
-#                                                            val_probs_ra, val_labels_ra)
+    qa_accuracy, ra_accuracy, qar_accuracy = cal_net_accuracy(val_probs_qa, val_labels_qa,
+                                                           val_probs_ra, val_labels_ra)
 
-#     val_loss_avg_qa = val_loss_sum_qa / val_labels_qa.shape[0]
-#     val_loss_avg_ra = val_loss_sum_ra / val_labels_ra.shape[0]
-#     val_loss_avg_qar = val_loss_sum_qar / val_labels_qa.shape[0]
+    val_loss_avg_qa = val_loss_sum_qa / val_labels_qa.shape[0]
+    val_loss_avg_ra = val_loss_sum_ra / val_labels_ra.shape[0]
+    val_loss_avg_qar = val_loss_sum_qar / val_labels_qa.shape[0]
 
-#     log_tensorboard('val', epoch_num * tot_epoch_batch, val_loss_avg_qa.detach().cpu().item(), val_loss_avg_ra.detach().cpu().item(), 
-#                          val_loss_avg_qar.detach().cpu().item(), qa_accuracy, ra_accuracy, qar_accuracy)
+    log_tensorboard('val', epoch_num * tot_epoch_batch, val_loss_avg_qa.detach().cpu().item(), val_loss_avg_ra.detach().cpu().item(), 
+                         val_loss_avg_qar.detach().cpu().item(), qa_accuracy, ra_accuracy, qar_accuracy)
 
 
-#     val_metric_per_epoch.append(qar_accuracy)
-#     if scheduler:
-#         scheduler.step(val_metric_per_epoch[-1], epoch_num)
+    val_metric_per_epoch.append(qar_accuracy)
+    if scheduler:
+        scheduler.step(val_metric_per_epoch[-1], epoch_num)
 
-#     print("Val epoch {} has qa acc {:.3f} and qa loss {:.3f}".format(epoch_num, qa_accuracy, val_loss_avg_qa), flush=True)
-#     print("Val epoch {} has ra acc {:.3f} and ra loss {:.3f}".format(epoch_num, ra_accuracy, val_loss_avg_ra), flush=True)
-#     print("Val epoch {} has qar acc {:.3f} and qar loss {:.3f}".format(epoch_num, qar_accuracy, val_loss_avg_qar), flush=True)
+    print("Val epoch {} has qa acc {:.3f} and qa loss {:.3f}".format(epoch_num, qa_accuracy, val_loss_avg_qa), flush=True)
+    print("Val epoch {} has ra acc {:.3f} and ra loss {:.3f}".format(epoch_num, ra_accuracy, val_loss_avg_ra), flush=True)
+    print("Val epoch {} has qar acc {:.3f} and qar loss {:.3f}".format(epoch_num, qar_accuracy, val_loss_avg_qar), flush=True)
     
-#     if int(np.argmax(val_metric_per_epoch)) < (len(val_metric_per_epoch) - 1 - params['trainer']['patience']):
-#         print("Stopping at epoch {:2d}".format(epoch_num))
-#         break
-#     save_checkpoint(model_qa, 'qa',  optimizer, args.folder, epoch_num, val_metric_per_epoch,
-#                     is_best=int(np.argmax(val_metric_per_epoch)) == (len(val_metric_per_epoch) - 1))
-#     save_checkpoint(model_ra, 'ra', optimizer, args.folder, epoch_num, val_metric_per_epoch,
-#                     is_best=int(np.argmax(val_metric_per_epoch)) == (len(val_metric_per_epoch) - 1))
+    if int(np.argmax(val_metric_per_epoch)) < (len(val_metric_per_epoch) - 1 - params['trainer']['patience']):
+        print("Stopping at epoch {:2d}".format(epoch_num))
+        break
+    save_checkpoint(model_qa, 'qa',  optimizer, args.folder, epoch_num, val_metric_per_epoch,
+                    is_best=int(np.argmax(val_metric_per_epoch)) == (len(val_metric_per_epoch) - 1))
+    save_checkpoint(model_ra, 'ra', optimizer, args.folder, epoch_num, val_metric_per_epoch,
+                    is_best=int(np.argmax(val_metric_per_epoch)) == (len(val_metric_per_epoch) - 1))
 
-# print("STOPPING. now running the best model on the validation set", flush=True)
-# # Load best
-# restore_best_checkpoint(model_qa, 'qa', args.folder)
-# restore_best_checkpoint(model_ra, 'ra', args.folder)
+print("STOPPING. now running the best model on the validation set", flush=True)
+# Load best
+restore_best_checkpoint(model_qa, 'qa', args.folder)
+restore_best_checkpoint(model_ra, 'ra', args.folder)
     
-# model_qa.eval()
-# model_ra.eval()
+model_qa.eval()
+model_ra.eval()
  
-# val_probs_qa = []
-# val_probs_ra = []
-# val_labels_qa = []
-# val_labels_ra = []
+val_probs_qa = []
+val_probs_ra = []
+val_labels_qa = []
+val_labels_ra = []
 
-# val_loader_ra_0_iter = iter(val_loader_ra_0)
-# val_loader_ra_1_iter = iter(val_loader_ra_1)
-# val_loader_ra_2_iter = iter(val_loader_ra_2)
-# val_loader_ra_3_iter = iter(val_loader_ra_3)
-    
-# for b, (time_per_batch, batch_qa) in enumerate(time_batch(val_loader_qa)):
-#     with torch.no_grad():
-#         batch_qa = _to_gpu(batch_qa)
+
+for b, (time_per_batch, batch) in enumerate(time_batch(val_loader)):
+    with torch.no_grad():
+        batch = _to_gpu(batch)
         
-#         try:
-#             batch_ra_0 = val_loader_ra_0_iter.next()
-#             batch_ra_1 = val_loader_ra_1_iter.next()
-#             batch_ra_2 = val_loader_ra_2_iter.next()
-#             batch_ra_3 = val_loader_ra_3_iter.next()
-#         except StopIteration:
-#             val_loader_ra_0_iter = iter(val_loader_ra_0)
-#             val_loader_ra_1_iter = iter(val_loader_ra_1)
-#             val_loader_ra_2_iter = iter(val_loader_ra_2)
-#             val_loader_ra_3_iter = iter(val_loader_ra_3)
-            
-#             batch_ra_0 = val_loader_ra_0_iter.next()
-#             batch_ra_1 = val_loader_ra_1_iter.next()
-#             batch_ra_2 = val_loader_ra_2_iter.next()
-#             batch_ra_3 = val_loader_ra_3_iter.next()
+        output_dict_qa = model_qa(batch)
 
-#         batch_ra_0, batch_ra_1, batch_ra_2, batch_ra_3 = _to_gpu(batch_ra_0), _to_gpu(batch_ra_1), _to_gpu(batch_ra_2), _to_gpu(batch_ra_3)
+        logits = output_dict_qa['label_logits']
+        output_dict_ra = model_ra(logits, batch)
 
-#         output_dict_qa = model_qa(**batch_qa)
-#         output_dict_ra = model_ra(batch_ra_0, batch_ra_1, batch_ra_2, batch_ra_3)
-
-#         val_probs_qa.append(output_dict_qa['label_probs'].detach().cpu().numpy())
-#         val_probs_ra.append(output_dict_ra['label_probs'].detach().cpu().numpy())
-#         #val_probs_ra.append(F.softmax(out_logits_ra, dim=-1).detach().cpu().numpy())
+        val_probs_qa.append(output_dict_qa['label_probs'].detach().cpu().numpy())
+        val_probs_ra.append(output_dict_ra['label_probs'].detach().cpu().numpy())
+        #val_probs_ra.append(F.softmax(out_logits_ra, dim=-1).detach().cpu().numpy())
         
-#         qa_label = batch_qa['label']
-#         ra_label = batch_ra_0['label']
-#         val_labels_qa.append(qa_label.detach().cpu().numpy())
-#         val_labels_ra.append(ra_label.detach().cpu().numpy())
+        qa_label = batch['label']
+        ra_label = batch['label_ra']
+        val_labels_qa.append(qa_label.detach().cpu().numpy())
+        val_labels_ra.append(ra_label.detach().cpu().numpy())
 
-# val_labels_qa = np.concatenate(val_labels_qa, 0)
-# val_labels_ra = np.concatenate(val_labels_ra, 0)
-# val_probs_qa = np.concatenate(val_probs_qa, 0)
-# val_probs_ra = np.concatenate(val_probs_ra, 0)
+val_labels_qa = np.concatenate(val_labels_qa, 0)
+val_labels_ra = np.concatenate(val_labels_ra, 0)
+val_probs_qa = np.concatenate(val_probs_qa, 0)
+val_probs_ra = np.concatenate(val_probs_ra, 0)
     
-# qa_accuracy, ra_accuracy, qar_accuracy = cal_net_accuracy(val_probs_qa, val_labels_qa,
-#                                                            val_probs_ra, val_labels_ra)
+qa_accuracy, ra_accuracy, qar_accuracy = cal_net_accuracy(val_probs_qa, val_labels_qa,
+                                                           val_probs_ra, val_labels_ra)
 
-# print("Final qa val accuracy is {:.3f}".format(qa_accuracy))
-# print("Final ra val accuracy is {:.3f}".format(ra_accuracy))
-# print("Final qar val accuracy is {:.3f}".format(qar_accuracy))
-# np.save(os.path.join(args.folder, f'valpreds_qa.npy'), val_probs_qa)
-# np.save(os.path.join(args.folder, f'valpreds_ra.npy'), val_probs_ra)
+print("Final qa val accuracy is {:.3f}".format(qa_accuracy))
+print("Final ra val accuracy is {:.3f}".format(ra_accuracy))
+print("Final qar val accuracy is {:.3f}".format(qar_accuracy))
+np.save(os.path.join(args.folder, f'valpreds_qa.npy'), val_probs_qa)
+np.save(os.path.join(args.folder, f'valpreds_ra.npy'), val_probs_ra)
