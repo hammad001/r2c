@@ -408,7 +408,7 @@ class VCR(Dataset):
             boxes *= img_scale
             boxes[:, :2] += np.array(padding[:2])[None]
             boxes[:, 2:] += np.array(padding[:2])[None]
-            obj_labels = [self.coco_obj_to_ind[item['objects'][i]] for i in dets2use.tolist()]
+            obj_labels = [self.coco_obj_to_ind[item['objects'][i]] for i in dets2use_ra.tolist()]
             if self.add_image_as_a_box:
                 boxes = np.row_stack((window, boxes))
                 segms = np.concatenate((np.ones((1, 14, 14), dtype=np.float32), segms), 0)
@@ -428,9 +428,8 @@ class VCR(Dataset):
 
         ###########################
 
-        self.only_use_relevant_dets = False
-        dets2use_ra, _ = self._get_dets_to_use_ra(item, item_question['question_ra_0']) # does not matter what question_ra is being used, we return all
-
+        dets2use_ra = np.ones(len(item['objects']), dtype=bool)
+        dets2use_ra = np.where(dets2use_ra)[0]
         segms = np.stack([make_mask(mask_size=14, box=metadata['boxes'][i], polygons_list=metadata['segms'][i])
                             for i in dets2use_ra])
 
@@ -440,7 +439,7 @@ class VCR(Dataset):
         boxes *= img_scale
         boxes[:, :2] += np.array(padding[:2])[None]
         boxes[:, 2:] += np.array(padding[:2])[None]
-        obj_labels = [self.coco_obj_to_ind[item['objects'][i]] for i in dets2use.tolist()]
+        obj_labels = [self.coco_obj_to_ind[item['objects'][i]] for i in dets2use_ra.tolist()]
         if self.add_image_as_a_box:
             boxes = np.row_stack((window, boxes))
             segms = np.concatenate((np.ones((1, 14, 14), dtype=np.float32), segms), 0)
