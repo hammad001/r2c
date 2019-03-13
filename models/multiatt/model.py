@@ -341,6 +341,7 @@ class AttentionQRA(Model):
         # not needed
        
         # Now get the question representations
+        logits = F.softmax(logits, dim=1)
 
         images = batch_ra['images']
         
@@ -360,10 +361,10 @@ class AttentionQRA(Model):
         # label = batch_ra['label']
         label = batch_ra['label_ra']
 
-        objects = batch_ra[f'objects_ra']
-        segms =  batch_ra[f'segms_ra']
-        boxes = batch_ra[f'boxes_ra']
-        box_mask = batch_ra[f'box_mask_ra']
+        objects = batch_ra['objects_ra']
+        segms =  batch_ra['segms_ra']
+        boxes = batch_ra['boxes_ra']
+        box_mask = batch_ra['box_mask_ra']
 
         max_len = int(box_mask.sum(1).max().item())
         objects = objects[:, :max_len]
@@ -373,6 +374,7 @@ class AttentionQRA(Model):
 
         obj_reps = self.detector(images=images, boxes=boxes, box_mask=box_mask, classes=objects, segms=segms)
         a_rep, _ = self.embed_span(answers, answer_tags, answer_mask, obj_reps['obj_reps'])
+        a_reps_loss = obj_reps['cnn_regularization_loss']
         
         for i in range(4):
             
@@ -424,9 +426,12 @@ class AttentionQRA(Model):
                 if i == 0:
                     w_attended_q = logits[:,i].unsqueeze(1).expand_as(attended_q)*attended_q
                     w_reg_loss = logits[:,i] * obj_reps['cnn_regularization_loss']
+                    #print("cnn loss"+obj_reps['cnn_regularization_loss'])
                 else:
                     w_attended_q += logits[:,i].unsqueeze(1).expand_as(attended_q)*attended_q
                     w_reg_loss += logits[:,i] * obj_reps['cnn_regularization_loss']
+                    
+                    #print("cnn loss"+obj_reps['cnn_regularization_loss'])
                 
             except:
                 import pdb
@@ -469,7 +474,7 @@ class AttentionQRA(Model):
         class_probabilities = F.softmax(logits, dim=-1)
 
         output_dict = {"label_logits": logits, "label_probs": class_probabilities,
-                       'cnn_regularization_loss': w_reg_loss,
+                       'cnn_regularization_loss': (w_reg_loss.mean() + a_reps_loss)/2,
                        # Uncomment to visualize attention, if you want
                        # 'qa_attention_weights': qa_attention_weights,
                        # 'atoo_attention_weights': atoo_attention_weights,
