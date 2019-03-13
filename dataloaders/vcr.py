@@ -221,13 +221,11 @@ class VCR(Dataset):
         # Load questions and answers
 
         #assuming item may already have a question
-        item_question = item['question']
-        conditioned_label = item['answer_label'] 
-        print(conditioned_label, conditioned_label.type())
-        item_question['question_ra_0'] = item_question + item['answer_choices'][0]        
-        item_question['question_ra_1'] = item_question + item['answer_choices'][1]        
-        item_question['question_ra_2'] = item_question + item['answer_choices'][2]        
-        item_question['question_ra_3'] = item_question + item['answer_choices'][3]
+        item_question = {}
+        item_question['question_ra_0'] = item['question'] + item['answer_choices'][0]        
+        item_question['question_ra_1'] = item['question'] + item['answer_choices'][1]        
+        item_question['question_ra_2'] = item['question'] + item['answer_choices'][2]        
+        item_question['question_ra_3'] = item['question'] + item['answer_choices'][3]
 
         #self.mode == "rationale" else ""
 
@@ -282,7 +280,7 @@ class VCR(Dataset):
             instance_dict = {}
             if 'endingonly' not in self.embs_to_load:
                 questions_tokenized, question_tags = zip(*[_fix_tokenization(
-                    item['question_ra_{j}'],
+                    item_question['question_ra_{j}'],
                     grp_items_ra[f'ctx_rationale_{j}{i}'],
                     old_det_to_new_ind,
                     item['objects'],
