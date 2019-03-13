@@ -137,7 +137,8 @@ class VCR(Dataset):
         self.coco_obj_to_ind = {o: i for i, o in enumerate(self.coco_objects)}
 
         self.embs_to_load = embs_to_load
-        self.h5fn = os.path.join(VCR_ANNOTS_DIR, f'{self.embs_to_load}_{self.mode}_{self.split}.h5')
+        self.h5fn = os.path.join(VCR_ANNOTS_DIR, f'{self.embs_to_load}_{self.split}.h5')
+        self.h5fn_ra = os.path.join(VCR_ANNOTS_DIR, f'{self.embs_to_load}_rationale_{self.split}.h5')
         print("Loading embeddings from {}".format(self.h5fn), flush=True)
 
     @property
@@ -149,12 +150,10 @@ class VCR(Dataset):
         """ Helper method to generate splits of the dataset"""
         kwargs_copy = {x: y for x, y in kwargs.items()}
         
-        train = [cls(split='train', mode='answer', **kwargs)] + [
-            cls(split='train', mode='rationale', conditioned_answer_choice=i, **kwargs) for i in range(4)]
+        train = cls(split='train', **kwargs)
 
-        val =  [cls(split='val', mode='answer', **kwargs)] + [
-            cls(split='val', mode='rationale', conditioned_answer_choice=i, **kwargs) for i in range(4)]
-
+        val =  cls(split='val',  **kwargs)
+            
         return train, val
 
     @classmethod
@@ -241,6 +240,9 @@ class VCR(Dataset):
         with h5py.File(self.h5fn, 'r') as h5:
             grp_items = {k: np.array(v, dtype=np.float16) for k, v in h5[str(index)].items()}
 
+        with h5py.File(self.h5fn_ra, 'r') as h5:
+            grp_items_ra = {k: np.array(v, dtype=np.float16) for k, v in h5[str(index)].items()}
+
         # Essentially we need to condition on the right answer choice here, if we're doing QA->R. We will always
         # condition on the `conditioned_answer_choice.`
         #for qa
@@ -279,7 +281,7 @@ class VCR(Dataset):
             if 'endingonly' not in self.embs_to_load:
                 questions_tokenized, question_tags = zip(*[_fix_tokenization(
                     item['question_ra_{j}'],
-                    grp_items[f'ctx_rationale_{j}{i}'],
+                    grp_items_ra[f'ctx_rationale_{j}{i}'],
                     old_det_to_new_ind,
                     item['objects'],
                     token_indexers=self.token_indexers,
@@ -291,7 +293,7 @@ class VCR(Dataset):
             
         answers_tokenized, answer_tags = zip(*[_fix_tokenization(
             answer,
-            grp_items[f'answer_rationale0{i}'], #answer_rationale_0=answer_rationale_1=answer_rationale_2=answer_rationale_3 there supposed to be one answer for ra, but supposedly not {j}, see their code
+            grp_items_ra[f'answer_rationale0{i}'], #answer_rationale_0=answer_rationale_1=answer_rationale_2=answer_rationale_3 there supposed to be one answer for ra, but supposedly not {j}, see their code
             old_det_to_new_ind,
             item['objects'],
             token_indexers=self.token_indexers,
