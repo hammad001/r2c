@@ -120,7 +120,6 @@ lr_scheduler_params = params['trainer'].pop("learning_rate_scheduler", None)
 scheduler = LearningRateScheduler.from_params(optimizer, lr_scheduler_params) if lr_scheduler_params else None
 
 if os.path.exists(args.folder):
-    print('Restore not set up')
     print("Found folder! restoring", flush=True)
     start_epoch, val_metric_per_epoch = restore_checkpoint(model_qa, 'qa', optimizer, serialization_dir=args.folder,
                                                            learning_rate_scheduler=scheduler)
@@ -185,7 +184,7 @@ for epoch_num in range(start_epoch, params['trainer']['num_epochs'] + start_epoc
         loss_ra = output_dict_ra['loss'].mean() + output_dict_ra['cnn_regularization_loss'].mean()
 
         # QA loss: RA loss ratio is 4:16 since qa chooses out of 4 choices while ra chooses out of 16 choices
-        loss = (4/20) * loss_qa + (16/20) * loss_ra
+        loss = loss_qa + loss_ra
 
         loss.backward()
 
@@ -259,7 +258,8 @@ for epoch_num in range(start_epoch, params['trainer']['num_epochs'] + start_epoc
             loss_ra = output_dict_ra['loss'].mean().item() * batch['label_ra'].shape[0] 
             val_loss_sum_ra += loss_ra
 
-            val_loss_sum_qar += (4/20) * loss_qa + (16/20) * loss_ra
+            val_loss_sum_qar += loss_qa + loss_ra
+            
             qa_label = batch['label']
             ra_label = batch['label_ra']
 

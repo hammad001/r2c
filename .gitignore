@@ -114,3 +114,9 @@ data/vcr1images
 
 # Submission File
 models/submission.csv
+
+# Bert Data
+data/get_bert_embeddings/bert-pretrained/
+data/get_bert_embeddings/pretrainingdata.tfrecord
+data/get_bert_embeddings/uncased_L-12_H-768_A-12.zip
+data/get_bert_embeddings/uncased_L-12_H-768_A-12/
