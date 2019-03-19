@@ -177,11 +177,11 @@ for epoch_num in range(start_epoch, params['trainer']['num_epochs'] + start_epoc
         optimizer.zero_grad()
         
         output_dict_qa = model_qa(batch)
-        logits = output_dict_qa['label_logits']
+        logits = output_dict_qa['label_probs']
         output_dict_ra = model_ra(batch) 
         
         all_ra_loss = output_dict_ra['all_ra_loss']
-        all_reg_loss = output_dict_ra['all_reg_loss']
+        all_reg_loss = output_dict_ra['all_ra_reg_loss']
         batch_sz = batch['label'].shape[0]
 
         exp_loss = torch.zeros(batch_sz)
@@ -189,7 +189,21 @@ for epoch_num in range(start_epoch, params['trainer']['num_epochs'] + start_epoc
         logits_sum = torch.zeros(batch_sz)
 
         for _ in range(64):
-            samp_ind = (torch.multinomial(logits, 1)).unsqueeze()
+            samp_ind = (torch.multinomial(logits, 1)).squeeze()
+            print(samp_ind)
+
+            try:
+                print('Size of samp_ind', samp_ind.size())
+                print('Size of all_ra_loss', all_ra_loss[samp_ind, range(batch_sz)].size())
+                print('Size of logits', logits.size())
+                print('Size of batch', batch_sz)
+                print('Unique values of samp_ind', torch.unique(samp_ind))
+                print('Size of logits after slicing', logits[range(batch_sz), samp_ind].size())
+
+            except:
+                import pdb
+                pdb.set_trace()
+
             exp_loss += all_ra_loss[samp_ind, range(batch_sz)] * logits[range(batch_sz), samp_ind]
             exp_reg_loss += all_reg_loss[samp_ind] * logits[range(batch_sz), samp_ind]
             logits_sum += logits[range(batch_sz), samp_ind]
@@ -267,18 +281,20 @@ for epoch_num in range(start_epoch, params['trainer']['num_epochs'] + start_epoc
     
             output_dict_qa = model_qa(batch)
             
-            logits = output_dict_qa['label_logits']
-            output_dict_ra = model_ra(logits, batch)
+            logits = output_dict_qa['label_probs']
+            output_dict_ra = model_ra(batch)
             
             all_ra_loss = output_dict_ra['all_ra_loss']
-            all_reg_loss = output_dict_ra['all_reg_loss']
             batch_sz = batch['label'].shape[0]
     
             exp_loss = torch.zeros(batch_sz)
             logits_sum = torch.zeros(batch_sz)
     
             for _ in range(64):
-                samp_ind = (torch.multinomial(logits, 1)).unsqueeze()
+                samp_ind = (torch.multinomial(logits, 1)).squeeze()
+                print('Size of samp_ind', samp_ind.size())
+                print('Size of all_ra_loss', all_ra_loss[samp_ind, range(batch_sz)].size())
+                print('Size of logits', logits[range(batch_sz), samp_ind].size())
                 exp_loss += all_ra_loss[samp_ind, range(batch_sz)] * logits[range(batch_sz), samp_ind]
                 logits_sum += logits[range(batch_sz), samp_ind]
     
@@ -355,7 +371,7 @@ for b, (time_per_batch, batch) in enumerate(time_batch(val_loader)):
         
         output_dict_qa = model_qa(batch)
 
-        logits = output_dict_qa['label_logits']
+        logits = output_dict_qa['label_probs']
         output_dict_ra = model_ra(batch)
 
         val_probs_qa.append(output_dict_qa['label_probs'].detach().cpu().numpy())

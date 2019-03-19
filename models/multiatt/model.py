@@ -226,7 +226,7 @@ class AttentionQA(Model):
 
 
 @Model.register("MultiHopAttentionQAR")
-class AttentionQRA(Model):
+class AttentionQAR(Model):
     def __init__(self,
                  vocab: Vocabulary,
                  span_encoder: Seq2SeqEncoder,
@@ -242,7 +242,7 @@ class AttentionQRA(Model):
                  pool_question: bool = False,
                  initializer: InitializerApplicator = InitializerApplicator(),
                  ):
-        super(AttentionQRA, self).__init__(vocab)
+        super(AttentionQAR, self).__init__(vocab)
 
         self.detector = SimpleDetector(pretrained=True, average_pool=True, semantic=class_embs, final_dim=512)
         ###################################################################################################
@@ -343,9 +343,9 @@ class AttentionQRA(Model):
         images = batch_ra['images']
         batch_sz = images.size()[0]
 
-        all_ra_reg_loss = torch.zeros([4, 1])
-        all_ra_loss = torch.zeros([4, batch_sz])
-        all_ra_class_probs = torch.zeros([4, batch_sz, 4])
+        all_ra_reg_loss = torch.zeros([4, 1]).cuda()
+        all_ra_loss = torch.zeros([4, batch_sz]).cuda()
+        all_ra_class_probs = torch.zeros([4, batch_sz, 4]).cuda()
         
         # answer_tags = batch_ra['answer_tags']
         # answers = batch_ra['answers']
@@ -359,7 +359,6 @@ class AttentionQRA(Model):
         # question_tags = batch_ra[f'question_tags']
         # question_mask = batch_ra[f'question_mask']
         
-        metadata = batch_ra['metadata']
         # label = batch_ra['label']
         label = batch_ra['label_ra']
 
