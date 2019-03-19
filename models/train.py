@@ -184,12 +184,12 @@ for epoch_num in range(start_epoch, params['trainer']['num_epochs'] + start_epoc
         all_reg_loss = output_dict_ra['all_ra_reg_loss']
         batch_sz = batch['label'].shape[0]
 
-        exp_loss = torch.zeros(batch_sz)
-        exp_reg_loss = torch.zeros(batch_sz)
-        logits_sum = torch.zeros(batch_sz)
+        exp_loss = torch.zeros(batch_sz).cuda()
+        exp_reg_loss = torch.zeros(batch_sz).cuda()
+        logits_sum = torch.zeros(batch_sz).cuda()
 
         for _ in range(64):
-            samp_ind = (torch.multinomial(logits, 1)).squeeze()
+            samp_ind = (torch.multinomial(logits, 1)).squeeze().cuda()
             print(samp_ind)
 
             try:
