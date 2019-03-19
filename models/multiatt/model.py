@@ -280,7 +280,7 @@ class AttentionQRA(Model):
             torch.nn.Linear(hidden_dim_maxpool, 1),
         )
         self._accuracy = CategoricalAccuracy()
-        self._loss = torch.nn.CrossEntropyLoss()
+        self._loss = torch.nn.CrossEntropyLoss(reduction='none')
         initializer(self)
 
     def _collect_obj_reps(self, span_tags, object_reps):
@@ -319,7 +319,6 @@ class AttentionQRA(Model):
         return self.span_encoder(span_rep, span_mask), retrieved_feats
 
     def forward(self,
-                logits: torch.Tensor,
                 batch_ra) -> Dict[str, torch.Tensor]:
 
         """
@@ -341,9 +340,12 @@ class AttentionQRA(Model):
         # not needed
        
         # Now get the question representations
-        logits = F.softmax(logits, dim=1)
-
         images = batch_ra['images']
+        batch_sz = images.size()[0]
+
+        all_ra_reg_loss = torch.zeros([4, 1])
+        all_ra_loss = torch.zeros([4, batch_sz])
+        all_ra_class_probs = torch.zeros([4, batch_sz, 4])
         
         # answer_tags = batch_ra['answer_tags']
         # answers = batch_ra['answers']
@@ -415,75 +417,52 @@ class AttentionQRA(Model):
             qa_attention_weights = masked_softmax(qa_similarity, question_mask[..., None], dim=2)
             attended_q = torch.einsum('bnqa,bnqd->bnad', (qa_attention_weights, q_rep))
             
-            batch_size = attended_q.size()[0]
-            question_length = attended_q.size()[2]            
-            answer_length = attended_q.size()[3]
-            
-            attended_q = attended_q.reshape(batch_size, -1)
-
-            #print("shape", logits.size(), attended_q.size() )
-
-            try:
-                if i == 0:
-                    w_attended_q = logits[:,i].unsqueeze(1).expand_as(attended_q)*attended_q
-                    w_reg_loss = logits[:,i] * obj_reps['cnn_regularization_loss']
-                    #print("cnn loss"+obj_reps['cnn_regularization_loss'])
-                else:
-                    w_attended_q += logits[:,i].unsqueeze(1).expand_as(attended_q)*attended_q
-                    w_reg_loss += logits[:,i] * obj_reps['cnn_regularization_loss']
-                    
-                    #print("cnn loss"+obj_reps['cnn_regularization_loss'])
+            all_ra_reg_loss[i] =  (obj_reps['cnn_regularization_loss'].mean() + a_reps_loss.mean())/2
                 
-            except:
-                import pdb
-                pdb.set_trace()  
-                          
-        w_attended_q = w_attended_q.reshape(batch_size, 4, question_length, answer_length)
+            # Have a second attention over the objects, do A by Objs
+            # [batch_size, 4, answer_length, num_objs]
+            atoo_similarity = self.obj_attention(a_rep.view(a_rep.shape[0], a_rep.shape[1] * a_rep.shape[2], -1),
+                                                obj_reps['obj_reps']).view(a_rep.shape[0], a_rep.shape[1],
+                                                                a_rep.shape[2], obj_reps['obj_reps'].shape[1])
+            atoo_attention_weights = masked_softmax(atoo_similarity, box_mask[:,None,None])
+            attended_o = torch.einsum('bnao,bod->bnad', (atoo_attention_weights, obj_reps['obj_reps']))
+    
+    
+            reasoning_inp = torch.cat([x for x, to_pool in [(a_rep, self.reasoning_use_answer),
+                                                                (attended_o, self.reasoning_use_obj),
+                                                                (attended_q, self.reasoning_use_question)]
+                                            if to_pool], -1)
+    
+           
+            if self.rnn_input_dropout is not None:
+                reasoning_inp = self.rnn_input_dropout(reasoning_inp)
+            reasoning_output = self.reasoning_encoder(reasoning_inp, answer_mask)
+    
+    
+            ###########################################
+            things_to_pool = torch.cat([x for x, to_pool in [(reasoning_output, self.pool_reasoning),
+                                                             (a_rep, self.pool_answer),
+                                                             (attended_q, self.pool_question)] if to_pool], -1)
+    
+            pooled_rep = replace_masked_values(things_to_pool,answer_mask[...,None], -1e7).max(2)[0]
+            logits = self.final_mlp(pooled_rep).squeeze(2)
+    
+            ###########################################
+    
+            all_ra_class_probs[i] = F.softmax(logits, dim=-1)
+    
+            output_dict = {"all_ra_label_probs": all_ra_class_probs,
+                           'all_ra_reg_loss': all_ra_reg_loss,
+                           # Uncomment to visualize attention, if you want
+                           # 'qa_attention_weights': qa_attention_weights,
+                           # 'atoo_attention_weights': atoo_attention_weights,
+                           }
+            if label is not None:
+                loss = self._loss(logits, label.long().view(-1))
+                all_ra_loss[i] = loss
 
-                
-                
-        # Have a second attention over the objects, do A by Objs
-        # [batch_size, 4, answer_length, num_objs]
-        atoo_similarity = self.obj_attention(a_rep.view(a_rep.shape[0], a_rep.shape[1] * a_rep.shape[2], -1),
-                                            obj_reps['obj_reps']).view(a_rep.shape[0], a_rep.shape[1],
-                                                            a_rep.shape[2], obj_reps['obj_reps'].shape[1])
-        atoo_attention_weights = masked_softmax(atoo_similarity, box_mask[:,None,None])
-        attended_o = torch.einsum('bnao,bod->bnad', (atoo_attention_weights, obj_reps['obj_reps']))
-
-
-        reasoning_inp = torch.cat([x for x, to_pool in [(a_rep, self.reasoning_use_answer),
-                                                            (attended_o, self.reasoning_use_obj),
-                                                            (w_attended_q, self.reasoning_use_question)]
-                                        if to_pool], -1)
-
-       
-        if self.rnn_input_dropout is not None:
-            reasoning_inp = self.rnn_input_dropout(reasoning_inp)
-        reasoning_output = self.reasoning_encoder(reasoning_inp, answer_mask)
-
-
-        ###########################################
-        things_to_pool = torch.cat([x for x, to_pool in [(reasoning_output, self.pool_reasoning),
-                                                         (a_rep, self.pool_answer),
-                                                         (w_attended_q, self.pool_question)] if to_pool], -1)
-
-        pooled_rep = replace_masked_values(things_to_pool,answer_mask[...,None], -1e7).max(2)[0]
-        logits = self.final_mlp(pooled_rep).squeeze(2)
-
-        ###########################################
-
-        class_probabilities = F.softmax(logits, dim=-1)
-
-        output_dict = {"label_logits": logits, "label_probs": class_probabilities,
-                       'cnn_regularization_loss': (w_reg_loss.mean() + a_reps_loss)/2,
-                       # Uncomment to visualize attention, if you want
-                       # 'qa_attention_weights': qa_attention_weights,
-                       # 'atoo_attention_weights': atoo_attention_weights,
-                       }
         if label is not None:
-            loss = self._loss(logits, label.long().view(-1))
-            self._accuracy(logits, label)
-            output_dict["loss"] = loss[None]
+            output_dict["all_ra_loss"] = all_ra_loss
 
         return output_dict
 
