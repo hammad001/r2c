@@ -361,6 +361,7 @@ class AttentionQAR(Model):
         all_ra_reg_loss = []
         all_ra_loss = []
         all_ra_class_probs = []
+        all_ra_logits = []
 
         objects = batch_ra['objects_ra']
         segms =  batch_ra['segms_ra']
@@ -445,13 +446,15 @@ class AttentionQAR(Model):
     
             pooled_rep = replace_masked_values(things_to_pool,answer_mask[...,None], -1e7).max(2)[0]
             logits = self.final_mlp(pooled_rep).squeeze(2)
+            all_ra_logits.append(logits)
     
             ###########################################
     
             all_ra_class_probs.append(F.softmax(logits, dim=-1))
     
-            output_dict = {"all_ra_label_probs": torch.cat(all_ra_class_probs, 0),
-                           'all_ra_reg_loss': torch.cat(all_ra_reg_loss, 0),
+            output_dict = {"all_ra_label_probs": all_ra_class_probs,
+                           'all_ra_reg_loss': all_ra_reg_loss,
+                           'all_ra_logits': all_ra_logits,
                            # Uncomment to visualize attention, if you want
                            # 'qa_attention_weights': qa_attention_weights,
                            # 'atoo_attention_weights': atoo_attention_weights,
@@ -461,7 +464,7 @@ class AttentionQAR(Model):
                 all_ra_loss.append(loss)
 
         if label is not None:
-            output_dict["all_ra_loss"] = torch.cat(all_ra_loss, 0)
+            output_dict["all_ra_loss"] = all_ra_loss
 
         return output_dict
 
