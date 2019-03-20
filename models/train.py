@@ -81,7 +81,7 @@ def _to_gpu(td):
                 non_blocking=True)
     return td
 
-num_workers = (4 * NUM_GPUS if NUM_CPUS >= 32 else 2*NUM_GPUS)-1
+num_workers = 64 # (4 * NUM_GPUS if NUM_CPUS >= 32 else 2*NUM_GPUS)-1
 print(f"Using {num_workers} workers out of {NUM_CPUS} possible", flush=True)
 loader_params = {'batch_size': 96 // NUM_GPUS, 'num_gpus':NUM_GPUS, 'num_workers':num_workers}
 
@@ -173,7 +173,8 @@ for epoch_num in range(start_epoch, params['trainer']['num_epochs'] + start_epoc
     for b, (time_per_batch, batch) in enumerate(time_batch(train_loader if args.no_tqdm else tqdm(train_loader), reset_every=ARGS_RESET_EVERY)):
         
         batch = _to_gpu(batch)
-        
+        batch_sz = batch['label'].shape[0]
+
         optimizer.zero_grad()
         
         output_dict_qa = model_qa(batch)
@@ -181,38 +182,21 @@ for epoch_num in range(start_epoch, params['trainer']['num_epochs'] + start_epoc
         output_dict_ra = model_ra(batch) 
         
         all_ra_loss = output_dict_ra['all_ra_loss']
+        all_ra_loss = torch.t(torch.reshape(all_ra_loss, (batch_sz, -1)))
         all_reg_loss = output_dict_ra['all_ra_reg_loss']
-        batch_sz = batch['label'].shape[0]
 
         exp_loss = torch.zeros(batch_sz).cuda()
-        exp_reg_loss = torch.zeros(batch_sz).cuda()
         logits_sum = torch.zeros(batch_sz).cuda()
 
         for _ in range(64):
             samp_ind = (torch.multinomial(logits, 1)).squeeze().cuda()
-            print(samp_ind)
-
-            try:
-                print('Size of samp_ind', samp_ind.size())
-                print('Size of all_ra_loss', all_ra_loss[samp_ind, range(batch_sz)].size())
-                print('Size of logits', logits.size())
-                print('Size of batch', batch_sz)
-                print('Unique values of samp_ind', torch.unique(samp_ind))
-                print('Size of logits after slicing', logits[range(batch_sz), samp_ind].size())
-
-            except:
-                import pdb
-                pdb.set_trace()
-
             exp_loss += all_ra_loss[samp_ind, range(batch_sz)] * logits[range(batch_sz), samp_ind]
-            exp_reg_loss += all_reg_loss[samp_ind] * logits[range(batch_sz), samp_ind]
             logits_sum += logits[range(batch_sz), samp_ind]
 
         exp_loss = exp_loss/logits_sum
-        exp_reg_loss = exp_reg_loss/logits_sum
 
         loss_qa = output_dict_qa['loss'].mean() + output_dict_qa['cnn_regularization_loss'].mean()
-        loss_ra = exp_loss.mean() + exp_reg_loss.mean()
+        loss_ra = exp_loss.mean() + all_reg_loss.mean()
 
         loss = loss_qa + loss_ra
 
@@ -232,7 +216,8 @@ for epoch_num in range(start_epoch, params['trainer']['num_epochs'] + start_epoc
         ra_label = batch['label_ra']
 
         _, best_pred_quest_ind = torch.max(logits, 1)
-        out_ra_probs = output_dict_ra['all_ra_label_probs'][best_pred_quest_ind, range(batch_sz), :].detach().cpu().numpy()
+        pred_probs_all = output_dict_ra['all_ra_label_probs'].reshape(batch_sz, 4, 4)
+        out_ra_probs = pred_probs_all[range(batch_sz), best_pred_quest_ind, :].detach().cpu().numpy()
 
         qa_accuracy, ra_accuracy, qar_accuracy = cal_net_accuracy(output_dict_qa['label_probs'].detach().cpu().numpy(),
                                                            qa_label.detach().cpu().numpy(),
@@ -286,15 +271,15 @@ for epoch_num in range(start_epoch, params['trainer']['num_epochs'] + start_epoc
             
             all_ra_loss = output_dict_ra['all_ra_loss']
             batch_sz = batch['label'].shape[0]
+
+            all_ra_loss = output_dict_ra['all_ra_loss']
+            all_ra_loss = torch.t(torch.reshape(all_ra_loss, (batch_sz, -1)))
     
-            exp_loss = torch.zeros(batch_sz)
-            logits_sum = torch.zeros(batch_sz)
+            exp_loss = torch.zeros(batch_sz).cuda()
+            logits_sum = torch.zeros(batch_sz).cuda()
     
             for _ in range(64):
-                samp_ind = (torch.multinomial(logits, 1)).squeeze()
-                print('Size of samp_ind', samp_ind.size())
-                print('Size of all_ra_loss', all_ra_loss[samp_ind, range(batch_sz)].size())
-                print('Size of logits', logits[range(batch_sz), samp_ind].size())
+                samp_ind = (torch.multinomial(logits, 1)).squeeze().cuda()
                 exp_loss += all_ra_loss[samp_ind, range(batch_sz)] * logits[range(batch_sz), samp_ind]
                 logits_sum += logits[range(batch_sz), samp_ind]
     
@@ -312,7 +297,8 @@ for epoch_num in range(start_epoch, params['trainer']['num_epochs'] + start_epoc
             ra_label = batch['label_ra']
 
             _, best_pred_quest_ind = torch.max(logits, 1)
-            out_ra_probs = output_dict_ra['all_ra_label_probs'][best_pred_quest_ind, range(batch_sz), :].detach().cpu().numpy()
+            pred_probs_all = output_dict_ra['all_ra_label_probs'].reshape(batch_sz, 4, 4)
+            out_ra_probs = pred_probs_all[range(batch_sz), best_pred_quest_ind, :].detach().cpu().numpy()
 
             val_probs_qa.append(output_dict_qa['label_probs'].detach().cpu().numpy())
             val_probs_ra.append(out_ra_probs)
@@ -368,6 +354,7 @@ val_labels_ra = []
 for b, (time_per_batch, batch) in enumerate(time_batch(val_loader)):
     with torch.no_grad():
         batch = _to_gpu(batch)
+        batch_sz = batch['label'].shape[0]
         
         output_dict_qa = model_qa(batch)
 
@@ -377,12 +364,15 @@ for b, (time_per_batch, batch) in enumerate(time_batch(val_loader)):
         val_probs_qa.append(output_dict_qa['label_probs'].detach().cpu().numpy())
         
         _, best_pred_quest_ind = torch.max(logits, 1)
-        out_ra_probs = output_dict_ra['all_ra_label_probs'][best_pred_quest_ind, range(batch_sz), :].detach().cpu().numpy()
+        pred_probs_all = output_dict_ra['all_ra_label_probs'].reshape(batch_sz, 4, 4)
+        out_ra_probs = pred_probs_all[range(batch_sz), best_pred_quest_ind, :].detach().cpu().numpy()
 
         qa_label = batch['label']
         ra_label = batch['label_ra']
+        
         val_labels_qa.append(qa_label.detach().cpu().numpy())
-        val_labels_ra.append(out_ra_probs)
+        val_labels_ra.append(ra_label.detach().cpu().numpy())
+        val_probs_ra.append(out_ra_probs)
 
 val_labels_qa = np.concatenate(val_labels_qa, 0)
 val_labels_ra = np.concatenate(val_labels_ra, 0)

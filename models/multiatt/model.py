@@ -4,6 +4,7 @@ Let's get the relationships yo
 
 from typing import Dict, List, Any
 
+import numpy as np
 import torch
 import torch.nn.functional as F
 import torch.nn.parallel
@@ -341,12 +342,7 @@ class AttentionQAR(Model):
        
         # Now get the question representations
         images = batch_ra['images']
-        batch_sz = images.size()[0]
 
-        all_ra_reg_loss = torch.zeros([4, 1]).cuda()
-        all_ra_loss = torch.zeros([4, batch_sz]).cuda()
-        all_ra_class_probs = torch.zeros([4, batch_sz, 4]).cuda()
-        
         # answer_tags = batch_ra['answer_tags']
         # answers = batch_ra['answers']
         # answer_mask = batch_ra['answer_mask']
@@ -361,6 +357,10 @@ class AttentionQAR(Model):
         
         # label = batch_ra['label']
         label = batch_ra['label_ra']
+        
+        all_ra_reg_loss = []
+        all_ra_loss = []
+        all_ra_class_probs = []
 
         objects = batch_ra['objects_ra']
         segms =  batch_ra['segms_ra']
@@ -416,7 +416,7 @@ class AttentionQAR(Model):
             qa_attention_weights = masked_softmax(qa_similarity, question_mask[..., None], dim=2)
             attended_q = torch.einsum('bnqa,bnqd->bnad', (qa_attention_weights, q_rep))
             
-            all_ra_reg_loss[i] =  (obj_reps['cnn_regularization_loss'].mean() + a_reps_loss.mean())/2
+            all_ra_reg_loss.append((obj_reps['cnn_regularization_loss'] + a_reps_loss)/2)
                 
             # Have a second attention over the objects, do A by Objs
             # [batch_size, 4, answer_length, num_objs]
@@ -448,20 +448,20 @@ class AttentionQAR(Model):
     
             ###########################################
     
-            all_ra_class_probs[i] = F.softmax(logits, dim=-1)
+            all_ra_class_probs.append(F.softmax(logits, dim=-1))
     
-            output_dict = {"all_ra_label_probs": all_ra_class_probs,
-                           'all_ra_reg_loss': all_ra_reg_loss,
+            output_dict = {"all_ra_label_probs": torch.cat(all_ra_class_probs, 0),
+                           'all_ra_reg_loss': torch.cat(all_ra_reg_loss, 0),
                            # Uncomment to visualize attention, if you want
                            # 'qa_attention_weights': qa_attention_weights,
                            # 'atoo_attention_weights': atoo_attention_weights,
                            }
             if label is not None:
                 loss = self._loss(logits, label.long().view(-1))
-                all_ra_loss[i] = loss
+                all_ra_loss.append(loss)
 
         if label is not None:
-            output_dict["all_ra_loss"] = all_ra_loss
+            output_dict["all_ra_loss"] = torch.cat(all_ra_loss, 0)
 
         return output_dict
 
