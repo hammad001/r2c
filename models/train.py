@@ -81,7 +81,7 @@ def _to_gpu(td):
                 non_blocking=True)
     return td
 
-num_workers = 64 # (4 * NUM_GPUS if NUM_CPUS >= 32 else 2*NUM_GPUS)-1
+num_workers = 16 # (4 * NUM_GPUS if NUM_CPUS >= 32 else 2*NUM_GPUS)-1
 print(f"Using {num_workers} workers out of {NUM_CPUS} possible", flush=True)
 loader_params = {'batch_size': 96 // NUM_GPUS, 'num_gpus':NUM_GPUS, 'num_workers':num_workers}
 
@@ -133,7 +133,7 @@ else:
     shutil.copy2(args.params, args.folder)
 
 
-def log_tensorboard(mode, it, qa_loss, ra_loss, qar_loss, qa_acc, ra_acc, qar_acc):
+def log_tensorboard(writer, mode, it, qa_loss, ra_loss, qar_loss, qa_acc, ra_acc, qar_acc):
     writer.add_scalar('{}.qa_loss'.format(mode), qa_loss, it)
     writer.add_scalar('{}.ra_loss'.format(mode), ra_loss, it)
     writer.add_scalar('{}.qar_loss'.format(mode), qar_loss, it)
@@ -159,11 +159,11 @@ def cal_net_accuracy(qa_preds, qa_label, ra_preds, ra_label):
 
     return qa_acc, ra_acc, np.mean(qar_matches)
 
-# criterion_ra = torch.nn.CrossEntropyLoss().cuda()
+log_writer = open('logs/cross-entropy-finally-5.txt', 'a')
 param_shapes = print_para(model_qa)
 num_batches = 0
 tot_epoch_batch = len(train_loader)
-img_log_chkp = 0.5 % tot_epoch_batch
+img_log_chkp = int(0.01 * tot_epoch_batch)
 criterion_ra = torch.nn.CrossEntropyLoss().cuda()
 for epoch_num in range(start_epoch, params['trainer']['num_epochs'] + start_epoch):
     train_results = []
@@ -210,19 +210,56 @@ for epoch_num in range(start_epoch, params['trainer']['num_epochs'] + start_epoc
         optimizer.step()
 
         qa_label = batch['label']
-        out_ra_probs =F.softmax(out_logits_ra, dim=-1).detach().cpu().numpy()
+        out_ra_probs = F.softmax(out_logits_ra, dim=-1).detach().cpu().numpy()
+        out_qa_probs = output_dict_qa['label_probs'].detach().cpu().numpy()
 
-        qa_accuracy, ra_accuracy, qar_accuracy = cal_net_accuracy(output_dict_qa['label_probs'].detach().cpu().numpy(),
+        qa_accuracy, ra_accuracy, qar_accuracy = cal_net_accuracy( out_qa_probs,
                                                            qa_label.detach().cpu().numpy(),
                                                            out_ra_probs,
                                                            ra_label.detach().cpu().numpy())
         
-        log_tensorboard('train', epoch_num * tot_epoch_batch + b, loss_qa.detach().cpu().item(), loss_ra.detach().cpu().item(), 
+        log_tensorboard(writer, 'train', epoch_num * tot_epoch_batch + b, loss_qa.detach().cpu().item(), loss_ra.detach().cpu().item(), 
                          loss.detach().cpu().item(), qa_accuracy, ra_accuracy, qar_accuracy)
 
-#        if b % img_log_chkp == 0:
-#            img = batch['images'][0]
-        
+        if b % img_log_chkp == 0:
+            img = batch['images_raw'][0]
+            img = img.cpu().numpy()
+     
+            question = batch['question_text'][0]
+            answers = batch['answers_text'][0]
+            answers_ra = batch['rationales_text'][0]
+    
+            question = ''.join(el + ' ' if type(el) is str else str(el[0])+' ' for el in question )
+            
+            answers_0 = ''.join(el + ' ' if type(el) is str else str(el[0])+' '  for el in answers[0] )
+            answers_1 = ''.join(el + ' ' if type(el) is str else str(el[0])+' '  for el in answers[1] )
+            answers_2 = ''.join(el + ' ' if type(el) is str else str(el[0])+' '  for el in answers[2] )
+            answers_3 = ''.join(el + ' ' if type(el) is str else str(el[0])+' '  for el in answers[3] )
+            
+            answers_ra_0 = ''.join(el + ' ' if type(el) is str else str(el[0])+' '  for el in answers_ra[0] )
+            answers_ra_1 = ''.join(el + ' ' if type(el) is str else str(el[0])+' '  for el in answers_ra[1] )
+            answers_ra_2 = ''.join(el + ' ' if type(el) is str else str(el[0])+' '  for el in answers_ra[2] )
+            answers_ra_3 = ''.join(el + ' ' if type(el) is str else str(el[0])+' '  for el in answers_ra[3] )
+    
+            answers = '- ' + answers_0 + '\n- ' + answers_1 + '\n- ' + answers_2 + '\n- ' + answers_3 + '\n'
+            answers_ra = '- ' + answers_ra_0 + '\n- ' + answers_ra_1 + '\n- ' + answers_ra_2 + '\n- ' + answers_ra_3 + '\n'
+     
+            qa_correct_ans = qa_label[0].cpu().item()
+            ra_correct_ans = ra_label[0].cpu().item()
+     
+            pred_qa_ans = np.argmax(out_qa_probs[0])
+            pred_ra_ans = np.argmax(out_ra_probs[0])
+    
+            writer.add_image('Image', img, epoch_num * tot_epoch_batch + b)
+            
+            log_writer.write('Step: ' +  str(epoch_num * tot_epoch_batch + b) + '\n')
+            log_writer.write('\nQuestion: ' +  question+'\n')
+            log_writer.write('\nAnswers: \n' + answers)
+            log_writer.write('\nRationales: \n' +  answers_ra)
+            log_writer.write('\nCorrect Answer: ' + str(qa_correct_ans) + ' | Correct Rationale: ' + str(ra_correct_ans)+'\n') 
+            log_writer.write('Predicted Answer: ' + str(pred_qa_ans) + ' | Predicted Rationale: ' + str(pred_ra_ans)+'\n')
+            log_writer.write('\n----------------------------------------------------------------------------------------------------------------- \n\n\n')
+
         train_results.append(pd.Series({'loss_qa': loss_qa.detach().cpu().item(),
                                         'loss_ra': loss_ra.detach().cpu().item(),
                                         'net_loss': loss.detach().cpu().item(),
@@ -300,7 +337,7 @@ for epoch_num in range(start_epoch, params['trainer']['num_epochs'] + start_epoc
     val_loss_avg_ra = val_loss_sum_ra / val_labels_ra.shape[0]
     val_loss_avg_qar = val_loss_sum_qar / val_labels_qa.shape[0]
 
-    log_tensorboard('val', epoch_num * tot_epoch_batch, val_loss_avg_qa, val_loss_avg_ra, 
+    log_tensorboard(writer, 'val', epoch_num * tot_epoch_batch, val_loss_avg_qa, val_loss_avg_ra, 
                          val_loss_avg_qar, qa_accuracy, ra_accuracy, qar_accuracy)
 
 
@@ -371,3 +408,5 @@ print("Final ra val accuracy is {:.3f}".format(ra_accuracy))
 print("Final qar val accuracy is {:.3f}".format(qar_accuracy))
 np.save(os.path.join(args.folder, f'valpreds_qa.npy'), val_probs_qa)
 np.save(os.path.join(args.folder, f'valpreds_ra.npy'), val_probs_ra)
+
+log_writer.close()

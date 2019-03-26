@@ -358,8 +358,9 @@ class VCR(Dataset):
         ###################################################################
         # Load image now and rescale it. Might have to subtract the mean and whatnot here too.
         image = load_image(os.path.join(VCR_IMAGES_DIR, item['img_fn']))
-        image, window, img_scale, padding = resize_image(image, random_pad=self.is_train)
-        image = to_tensor_and_normalize(image)
+        image_raw, window, img_scale, padding = resize_image(image, random_pad=self.is_train)
+        image_raw = np.asarray(image_raw)
+        image = to_tensor_and_normalize(image_raw)
         c, h, w = image.shape
 
         ###################################################################
@@ -457,18 +458,24 @@ class VCR(Dataset):
         assert np.all((boxes[:, 3] <= h))
         instance_dict['boxes_ra'] = ArrayField(boxes, padding_value=-1)
 
+        ##################################
+
+        question_text = item['question']
+        answers_text = item['answer_choices']
+        rationales_text = item['rationale_choices']
 
         #############################
         instance = Instance(instance_dict)
         instance.index_fields(self.vocab)
-        return image, instance
+        return question_text, answers_text, rationales_text, torch.from_numpy(image_raw), image, instance
 
 
 def collate_fn(data, to_gpu=False):
     """Creates mini-batch tensors
     """
-    images, instances = zip(*data)
+    question_text, answers_text, rationales_text, images_raw, images, instances = zip(*data)
     images = torch.stack(images, 0)
+    images_raw = torch.stack(images_raw, 0)
     batch = Batch(instances)
     td = batch.as_tensor_dict()
     if 'question' in td:
@@ -493,6 +500,10 @@ def collate_fn(data, to_gpu=False):
     td['answer_tags_ra'][td['answer_mask_ra'] == 0] = -2
 
     td['images'] = images
+    td['images_raw'] = images_raw
+    td['question_text'] = question_text
+    td['answers_text'] = answers_text
+    td['rationales_text'] = rationales_text
 
     # Deprecated
     # if to_gpu:
