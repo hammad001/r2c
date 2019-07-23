@@ -13,14 +13,14 @@ parser = argparse.ArgumentParser(description='Evaluate question -> answer and ra
 parser.add_argument(
     '-answer_preds',
     dest='answer_preds',
-    default='saves/flagship_answer/valpreds.npy',
+    default='/vcr2/vcr/gumbel-softmax-2/saves/valpreds_qa.npy',
     help='Location of question->answer predictions',
     type=str,
 )
 parser.add_argument(
     '-rationale_preds',
     dest='rationale_preds',
-    default='saves/flagship_rationale/valpreds.npy',
+    default='/vcr2/vcr/gumbel-softmax-2/saves/valpreds_ra.npy',
     help='Location of question+answer->rationale predictions',
     type=str,
 )

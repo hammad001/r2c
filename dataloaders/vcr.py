@@ -161,13 +161,15 @@ class VCR(Dataset):
     def eval_splits(cls, **kwargs):
         """ Helper method to generate splits of the dataset. Use this for testing, because it will
             condition on everything."""
-        for forbidden_key in ['mode', 'split', 'conditioned_answer_choice']:
-            if forbidden_key in kwargs:
-                raise ValueError(f"don't supply {forbidden_key} to eval_splits()")
+#        for forbidden_key in ['mode', 'split', 'conditioned_answer_choice']:
+#            if forbidden_key in kwargs:
+#                raise ValueError(f"don't supply {forbidden_key} to eval_splits()")
+#
+#        stuff_to_return = [cls(split='test', mode='answer', **kwargs)] + [
+#            cls(split='test', mode='rationale', conditioned_answer_choice=i, **kwargs) for i in range(4)]
 
-        stuff_to_return = [cls(split='test', mode='answer', **kwargs)] + [
-            cls(split='test', mode='rationale', conditioned_answer_choice=i, **kwargs) for i in range(4)]
-        return tuple(stuff_to_return)
+        test =  cls(split='test',  **kwargs)
+        return test
 
     def __len__(self):
         return len(self.items)
