@@ -394,72 +394,44 @@ class AttentionQRA(Model):
         obj_reps = self.detector(images=images, boxes=boxes, box_mask=box_mask, classes=objects, segms=segms)
         a_rep, _ = self.embed_span(answers, answer_tags, answer_mask, obj_reps['obj_reps'])
         a_reps_loss = obj_reps['cnn_regularization_loss']
+         
+        objects = batch_ra[f'objects_ra_ques']
+        segms =  batch_ra[f'segms_ra_ques']
+        boxes = batch_ra[f'boxes_ra_ques']
+        box_mask = batch_ra[f'box_mask_ra_ques']
         
-        for i in range(4):
-            
-            objects = batch_ra[f'objects_ra_{i}']
-            segms =  batch_ra[f'segms_ra_{i}']
-            boxes = batch_ra[f'boxes_ra_{i}']
-            box_mask = batch_ra[f'box_mask_ra_{i}']
-            
-            question = batch_ra[f'question_ra_{i}']
-            question_tags = batch_ra[f'question_tags_ra_{i}']
-            question_mask = batch_ra[f'question_mask_ra_{i}']
+        question = batch_ra[f'question_ra_ques']
+        question_tags = batch_ra[f'question_tags_ra_ques']
+        question_mask = batch_ra[f'question_mask_ra_ques']
  
-            max_len = int(box_mask.sum(1).max().item())
-            objects = objects[:, :max_len]
-            box_mask = box_mask[:, :max_len]
-            boxes = boxes[:, :max_len]
-            segms = segms[:, :max_len]
-           
-            tag_type = 'question' 
-            the_tags =  question_tags
-            if int(the_tags.max()) > max_len:
-                raise ValueError("Oh no! {}_tags has maximum of {} but objects is of dim {}. Values are\n{}".format(
-                    tag_type, int(the_tags.max()), objects.shape, the_tags
-                ))
-
-            obj_reps = self.detector(images=images, boxes=boxes, box_mask=box_mask, classes=objects, segms=segms)
-            
-            q_rep, _ = self.embed_span(question, question_tags, question_mask, obj_reps['obj_reps'])
-            
-            ####################################
-            # Perform Q by A attention
-            # [batch_size, 4, question_length, answer_length]
-
-            qa_similarity = self.span_attention(
-                q_rep.view(q_rep.shape[0] * q_rep.shape[1], q_rep.shape[2], q_rep.shape[3]),
-                a_rep.view(a_rep.shape[0] * a_rep.shape[1], a_rep.shape[2], a_rep.shape[3]),
-            ).view(a_rep.shape[0], a_rep.shape[1], q_rep.shape[2], a_rep.shape[2])
-            qa_attention_weights = masked_softmax(qa_similarity, question_mask[..., None], dim=2)
-            attended_q = torch.einsum('bnqa,bnqd->bnad', (qa_attention_weights, q_rep))
-            
-            batch_size = attended_q.size()[0]
-            question_length = attended_q.size()[2]            
-            answer_length = attended_q.size()[3]
-            
-            attended_q = attended_q.reshape(batch_size, -1)
-
-            #print("shape", logits.size(), attended_q.size() )
-
-            try:
-                if i == 0:
-                    w_attended_q = logits[:,i].unsqueeze(1).expand_as(attended_q)*attended_q
-                    w_reg_loss = logits[:,i] * obj_reps['cnn_regularization_loss']
-                    #print("cnn loss"+obj_reps['cnn_regularization_loss'])
-                else:
-                    w_attended_q += logits[:,i].unsqueeze(1).expand_as(attended_q)*attended_q
-                    w_reg_loss += logits[:,i] * obj_reps['cnn_regularization_loss']
-                    
-                    #print("cnn loss"+obj_reps['cnn_regularization_loss'])
-                
-            except:
-                import pdb
-                pdb.set_trace()  
-                          
-        w_attended_q = w_attended_q.reshape(batch_size, 4, question_length, answer_length)
-
-                
+        max_len = int(box_mask.sum(1).max().item())
+        objects = objects[:, :max_len]
+        box_mask = box_mask[:, :max_len]
+        boxes = boxes[:, :max_len]
+        segms = segms[:, :max_len]
+       
+        tag_type = 'question' 
+        the_tags =  question_tags
+        if int(the_tags.max()) > max_len:
+            raise ValueError("Oh no! {}_tags has maximum of {} but objects is of dim {}. Values are\n{}".format(
+                tag_type, int(the_tags.max()), objects.shape, the_tags
+            ))
+ 
+        obj_reps = self.detector(images=images, boxes=boxes, box_mask=box_mask, classes=objects, segms=segms)
+        
+        q_rep, _ = self.embed_span(question, question_tags, question_mask, obj_reps['obj_reps'])
+        
+        ####################################
+        # Perform Q by A attention
+        # [batch_size, 4, question_length, answer_length]
+ 
+        qa_similarity = self.span_attention(
+            q_rep.view(q_rep.shape[0] * q_rep.shape[1], q_rep.shape[2], q_rep.shape[3]),
+            a_rep.view(a_rep.shape[0] * a_rep.shape[1], a_rep.shape[2], a_rep.shape[3]),
+        ).view(a_rep.shape[0], a_rep.shape[1], q_rep.shape[2], a_rep.shape[2])
+        qa_attention_weights = masked_softmax(qa_similarity, question_mask[..., None], dim=2)
+        attended_q = torch.einsum('bnqa,bnqd->bnad', (qa_attention_weights, q_rep))
+       
                 
         # Have a second attention over the objects, do A by Objs
         # [batch_size, 4, answer_length, num_objs]
@@ -472,7 +444,7 @@ class AttentionQRA(Model):
 
         reasoning_inp = torch.cat([x for x, to_pool in [(a_rep, self.reasoning_use_answer),
                                                             (attended_o, self.reasoning_use_obj),
-                                                            (w_attended_q, self.reasoning_use_question)]
+                                                            (attended_q, self.reasoning_use_question)]
                                         if to_pool], -1)
 
        
@@ -484,7 +456,7 @@ class AttentionQRA(Model):
         ###########################################
         things_to_pool = torch.cat([x for x, to_pool in [(reasoning_output, self.pool_reasoning),
                                                          (a_rep, self.pool_answer),
-                                                         (w_attended_q, self.pool_question)] if to_pool], -1)
+                                                         (attended_q, self.pool_question)] if to_pool], -1)
 
         pooled_rep = replace_masked_values(things_to_pool,answer_mask[...,None], -1e7).max(2)[0]
         logits = self.final_mlp(pooled_rep).squeeze(2)

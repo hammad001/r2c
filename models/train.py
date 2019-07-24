@@ -191,7 +191,90 @@ for epoch_num in range(start_epoch, params['trainer']['num_epochs'] + start_epoc
     model_ra.train()
 
     for b, (time_per_batch, batch) in enumerate(time_batch(train_loader if args.no_tqdm else tqdm(train_loader), reset_every=ARGS_RESET_EVERY)):
+        label = batch['label']
+        batch_sz = label.size()[0]
+
+        probs = torch.ones(batch_sz, 4) * (25/3/100)
+        probs[range(batch_sz), label] = 0.75
+
+        samp_ind = torch.multinomial(probs, 1)
+        samp_ind = samp_ind.squeeze()
+        print('Samp ind size', samp_ind.size())
+
+        objects = batch[f'objects_ra_{0}']
+        segms =  batch[f'segms_ra_{0}']
+        boxes = batch[f'boxes_ra_{0}']
+        box_mask = batch[f'box_mask_ra_{0}']
         
+        question = batch[f'question_ra_{0}']
+        question_tags = batch[f'question_tags_ra_{0}']
+        question_mask = batch[f'question_mask_ra_{0}']
+
+        print('objects size', objects.size())
+        print('segms size', segms.size())
+        print('boxes size', boxes.size())
+        print('box_maxk size', box_mask.size())
+        print('question')
+        print(question['bert'].size())
+        print('question_tags size', question_tags.size())
+        print('question_mask size', question_mask.size())
+
+        try:
+
+            objects_ra_ques = torch.cat((batch[f'objects_ra_{0}'].unsqueeze(1), batch[f'objects_ra_{1}'].unsqueeze(1), batch[f'objects_ra_{2}'].unsqueeze(1), batch[f'objects_ra_{3}'].unsqueeze(1)), 1)
+            segms_ra_ques = torch.cat((batch[f'segms_ra_{0}'].unsqueeze(1), batch[f'segms_ra_{1}'].unsqueeze(1), batch[f'segms_ra_{2}'].unsqueeze(1), batch[f'segms_ra_{3}'].unsqueeze(1)), 1)
+            boxes_ra_ques = torch.cat((batch[f'boxes_ra_{0}'].unsqueeze(1), batch[f'boxes_ra_{1}'].unsqueeze(1), batch[f'boxes_ra_{2}'].unsqueeze(1), batch[f'boxes_ra_{3}'].unsqueeze(1)), 1)
+            box_mask_ra_ques = torch.cat((batch[f'box_mask_ra_{0}'].unsqueeze(1), batch[f'box_mask_ra_{1}'].unsqueeze(1), batch[f'box_mask_ra_{2}'].unsqueeze(1), batch[f'box_mask_ra_{3}'].unsqueeze(1)), 1)
+            
+            question_ra_ques = torch.cat((batch[f'question_ra_{0}']['bert'].unsqueeze(1), batch[f'question_ra_{1}']['bert'].unsqueeze(1), 
+                                batch[f'question_ra_{2}']['bert'].unsqueeze(1), batch[f'question_ra_{3}']['bert'].unsqueeze(1)), 1)
+            question_tags_ra_ques = torch.cat((batch[f'question_tags_ra_{0}'].unsqueeze(1), batch[f'question_tags_ra_{1}'].unsqueeze(1), 
+                                batch[f'question_tags_ra_{2}'].unsqueeze(1), batch[f'question_tags_ra_{3}'].unsqueeze(1)), 1)
+            question_mask_ra_ques = torch.cat((batch[f'question_mask_ra_{0}'].unsqueeze(1), batch[f'question_mask_ra_{1}'].unsqueeze(1), 
+                                batch[f'question_mask_ra_{2}'].unsqueeze(1), batch[f'question_mask_ra_{3}'].unsqueeze(1)), 1)
+
+        except:
+            import pdb
+            pdb.set_trace()
+    
+        print('------------------- After adding dimension along axis 1 ----------------------')
+        print('objects size', objects.size())
+        print('segms size', segms.size())
+        print('boxes size', boxes.size())
+        print('box_maxk size', box_mask.size())
+        print('question')
+        print(question['bert'].size())
+        print('question_tags size', question_tags.size())
+        print('question_mask size', question_mask.size())
+ 
+        objects_ra_ques = objects_ra_ques[:,segms, ...] 
+        segms_ra_ques = segms_ra_ques[:,segms, ...] 
+        boxes_ra_ques = boxes_ra_ques[:,segms, ...] 
+        box_mask_ra_ques = box_mask_ra_ques[:,segms, ...] 
+        question_ra_ques = question_ra_ques[:,segms, ...] 
+        qustion_tags_ra_ques =  qustion_tags_ra_ques[:,segms, ...] 
+        question_mask_ra_ques = question_mask_ra_ques[:,segms, ...] 
+        
+        print('------------------- After sampling from the objects ---------------------')
+        print('objects size', objects.size())
+        print('segms size', segms.size())
+        print('boxes size', boxes.size())
+        print('box_maxk size', box_mask.size())
+        print('question')
+        print(question['bert'].size())
+        print('question_tags size', question_tags.size())
+        print('question_mask size', question_mask.size())
+ 
+
+        batch['objects_ra_ques'] = objects_ra_ques
+        batch['segms_ra_ques'] = segms_ra_ques
+        batch['boxes_ra_ques'] = boxes_ra_ques
+        batch['box_mask_ra_ques'] = box_mask_ra_ques
+        batch['question_ra_ques'] = {'bert': question_ra_ques}
+        batch['quetion_tags_ra_ques'] = quetion_tags_ra_ques
+        batch['quetion_mask_ra_ques'] = quetion_mask_ra_ques
+
+        assert(1==2)
         batch = _to_gpu(batch)
         
         optimizer.zero_grad()
