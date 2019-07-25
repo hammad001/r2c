@@ -447,21 +447,23 @@ class AttentionQAR(Model):
             logits = self.final_mlp(pooled_rep).squeeze(2)
     
             ###########################################
-    
+
             all_ra_class_probs.append(F.softmax(logits, dim=-1))
     
-            output_dict = {"all_ra_label_probs": torch.cat(all_ra_class_probs, 0),
-                           'all_ra_reg_loss': torch.cat(all_ra_reg_loss, 0),
-                           # Uncomment to visualize attention, if you want
-                           # 'qa_attention_weights': qa_attention_weights,
-                           # 'atoo_attention_weights': atoo_attention_weights,
-                           }
+            
             if label is not None:
                 loss = self._loss(logits, label.long().view(-1))
                 all_ra_loss.append(loss)
 
+        output_dict = {"all_ra_label_probs": torch.stack(all_ra_class_probs, dim=1),
+                        'all_ra_reg_loss': all_ra_reg_loss,
+                        # Uncomment to visualize attention, if you want
+                        # 'qa_attention_weights': qa_attention_weights,
+                        # 'atoo_attention_weights': atoo_attention_weights,
+                        }
+
         if label is not None:
-            output_dict["all_ra_loss"] = torch.cat(all_ra_loss, 0)
+            output_dict["all_ra_loss"] = torch.stack(all_ra_loss, dim=1)
 
         return output_dict
 

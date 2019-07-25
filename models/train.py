@@ -179,24 +179,35 @@ for epoch_num in range(start_epoch, params['trainer']['num_epochs'] + start_epoc
         
         output_dict_qa = model_qa(batch)
         logits = output_dict_qa['label_probs']
+
         output_dict_ra = model_ra(batch) 
-        
         all_ra_loss = output_dict_ra['all_ra_loss']
-        all_ra_loss = torch.t(torch.reshape(all_ra_loss, (batch_sz, -1)))
         all_reg_loss = output_dict_ra['all_ra_reg_loss']
 
-        exp_loss = torch.zeros(batch_sz).cuda()
-        logits_sum = torch.zeros(batch_sz).cuda()
+        all_reg_loss_tensor = torch.ones((batch_sz, 4)).cuda()
+        try:
+            all_reg_loss_tensor[:,0] = all_reg_loss_tensor[:,0].clone() * (all_reg_loss[0].mean()/batch_sz)
+        except:
+            import pdb
+            pdb.set_trace()
+        all_reg_loss_tensor[:,1] = all_reg_loss_tensor[:,1].clone()  * (all_reg_loss[1].mean()/batch_sz)
+        all_reg_loss_tensor[:,2] = all_reg_loss_tensor[:,2].clone()  * (all_reg_loss[2].mean()/batch_sz)
+        all_reg_loss_tensor[:,3] = all_reg_loss_tensor[:,3].clone()  * (all_reg_loss[3].mean()/batch_sz)
 
-        for _ in range(64):
+        exp_loss = 0
+        reg_loss = 0
+        n_samples = 64
+
+        for _ in range(n_samples):
             samp_ind = (torch.multinomial(logits, 1)).squeeze().cuda()
-            exp_loss += all_ra_loss[samp_ind, range(batch_sz)] * logits[range(batch_sz), samp_ind]
-            logits_sum += logits[range(batch_sz), samp_ind]
+            exp_loss += (all_ra_loss[:, samp_ind] * logits[range(batch_sz), samp_ind]).mean()
+            reg_loss += (all_reg_loss_tensor[:, samp_ind] * logits[range(batch_sz), samp_ind]).sum()
 
-        exp_loss = exp_loss/logits_sum
+        exp_loss = exp_loss/n_samples
+        reg_loss = reg_loss/n_samples
 
         loss_qa = output_dict_qa['loss'].mean() + output_dict_qa['cnn_regularization_loss'].mean()
-        loss_ra = exp_loss.mean() + all_reg_loss.mean()
+        loss_ra = exp_loss + reg_loss
 
         loss = loss_qa + loss_ra
 
@@ -216,7 +227,7 @@ for epoch_num in range(start_epoch, params['trainer']['num_epochs'] + start_epoc
         ra_label = batch['label_ra']
 
         _, best_pred_quest_ind = torch.max(logits, 1)
-        pred_probs_all = output_dict_ra['all_ra_label_probs'].reshape(batch_sz, 4, 4)
+        pred_probs_all = output_dict_ra['all_ra_label_probs']
         out_ra_probs = pred_probs_all[range(batch_sz), best_pred_quest_ind, :].detach().cpu().numpy()
 
         qa_accuracy, ra_accuracy, qar_accuracy = cal_net_accuracy(output_dict_qa['label_probs'].detach().cpu().numpy(),
@@ -263,29 +274,21 @@ for epoch_num in range(start_epoch, params['trainer']['num_epochs'] + start_epoc
     for b, (time_per_batch, batch) in enumerate(time_batch(val_loader)):
         with torch.no_grad():
             batch = _to_gpu(batch)
+            batch_sz = batch['label'].shape[0]
     
             output_dict_qa = model_qa(batch)
-            
             logits = output_dict_qa['label_probs']
-            output_dict_ra = model_ra(batch)
-            
-            all_ra_loss = output_dict_ra['all_ra_loss']
-            batch_sz = batch['label'].shape[0]
 
+            output_dict_ra = model_ra(batch)
             all_ra_loss = output_dict_ra['all_ra_loss']
-            all_ra_loss = torch.t(torch.reshape(all_ra_loss, (batch_sz, -1)))
-    
-            exp_loss = torch.zeros(batch_sz).cuda()
-            logits_sum = torch.zeros(batch_sz).cuda()
-    
-            for _ in range(64):
-                samp_ind = (torch.multinomial(logits, 1)).squeeze().cuda()
-                exp_loss += all_ra_loss[samp_ind, range(batch_sz)] * logits[range(batch_sz), samp_ind]
-                logits_sum += logits[range(batch_sz), samp_ind]
-    
-            exp_loss = exp_loss/logits_sum
             
-            loss_ra = exp_loss.mean().item() * batch['label_ra'].shape[0] 
+            exp_loss = 0
+            for _ in range(n_samples):
+                samp_ind = (torch.multinomial(logits, 1)).squeeze().cuda()
+                exp_loss += (all_ra_loss[:, samp_ind] * logits[range(batch_sz), samp_ind]).mean()
+            exp_loss = exp_loss/n_samples
+            
+            loss_ra = exp_loss * batch['label_ra'].shape[0] 
             val_loss_sum_ra += loss_ra
 
             loss_qa = output_dict_qa['loss'].mean().item() * batch['label'].shape[0] 
@@ -297,7 +300,7 @@ for epoch_num in range(start_epoch, params['trainer']['num_epochs'] + start_epoc
             ra_label = batch['label_ra']
 
             _, best_pred_quest_ind = torch.max(logits, 1)
-            pred_probs_all = output_dict_ra['all_ra_label_probs'].reshape(batch_sz, 4, 4)
+            pred_probs_all = output_dict_ra['all_ra_label_probs']
             out_ra_probs = pred_probs_all[range(batch_sz), best_pred_quest_ind, :].detach().cpu().numpy()
 
             val_probs_qa.append(output_dict_qa['label_probs'].detach().cpu().numpy())
@@ -357,14 +360,14 @@ for b, (time_per_batch, batch) in enumerate(time_batch(val_loader)):
         batch_sz = batch['label'].shape[0]
         
         output_dict_qa = model_qa(batch)
-
         logits = output_dict_qa['label_probs']
+
         output_dict_ra = model_ra(batch)
 
         val_probs_qa.append(output_dict_qa['label_probs'].detach().cpu().numpy())
         
         _, best_pred_quest_ind = torch.max(logits, 1)
-        pred_probs_all = output_dict_ra['all_ra_label_probs'].reshape(batch_sz, 4, 4)
+        pred_probs_all = output_dict_ra['all_ra_label_probs']
         out_ra_probs = pred_probs_all[range(batch_sz), best_pred_quest_ind, :].detach().cpu().numpy()
 
         qa_label = batch['label']
