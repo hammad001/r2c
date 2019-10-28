@@ -108,6 +108,7 @@ data/bert_da*
 
 # Data Annotations
 data/*.jsonl
+data/*.bk
 
 # Data symbolic link
 data/vcr1images
