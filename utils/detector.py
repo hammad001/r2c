@@ -8,7 +8,7 @@ import torch.nn.parallel
 from torchvision.models import resnet
 
 from utils.pytorch_misc import Flattener
-from torchvision.layers import ROIAlign
+from torchvision.ops.roi_align import RoIAlign
 import torch.utils.model_zoo as model_zoo
 from config import USE_IMAGENET_PRETRAINED
 from utils.pytorch_misc import pad_sequence
@@ -67,7 +67,7 @@ class SimpleDetector(nn.Module):
             backbone.layer3,
             # backbone.layer4
         )
-        self.roi_align = ROIAlign((7, 7) if USE_IMAGENET_PRETRAINED else (14, 14),
+        self.roi_align = RoIAlign((7, 7) if USE_IMAGENET_PRETRAINED else (14, 14),
                                   spatial_scale=1 / 16, sampling_ratio=0)
 
         if semantic:
