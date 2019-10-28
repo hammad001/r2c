@@ -70,6 +70,9 @@ class AttentionQA(Model):
             torch.nn.Dropout(input_dropout, inplace=False),
             torch.nn.Linear(hidden_dim_maxpool, 1),
         )
+        self.gpt2_embed_dim = 768
+        self.embed = torch.nn.Linear(reasoning_encoder.get_output_dim(), self.gpt2_embed_dim)
+
         self._accuracy = CategoricalAccuracy()
         self._loss = torch.nn.CrossEntropyLoss()
         initializer(self)
@@ -207,6 +210,12 @@ class AttentionQA(Model):
         ###########################################
 
         class_probabilities = F.softmax(logits, dim=-1)
+
+        reason_rep = torch.einsum('bnad,bn->bad', (reasoning_output, class_probabilities))
+        gpt2_inp = self.embed(reason_rep)
+
+        import pdb
+        pdb.set_trace()
 
         output_dict = {"label_logits": logits, "label_probs": class_probabilities,
                        'cnn_regularization_loss': obj_reps['cnn_regularization_loss'],
