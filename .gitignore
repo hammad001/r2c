@@ -108,9 +108,13 @@ data/bert_da*
 
 # Data Annotations
 data/*.jsonl
+data/*.bk
 
 # Data symbolic link
 data/vcr1images
 
 # Submission File
 models/submission.csv
+
+# Bert embeddings
+data/get_bert_embeddings/*
