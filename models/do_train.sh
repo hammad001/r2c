@@ -1,3 +1,3 @@
 #!/bin/bash
 
-python train.py -params multiatt/default.json -folder /vcr2/vcr/gumbel-softmax-2/saves -tensorboard_log /vcr2/tensorboard_log/vcr/gumbel-softmax-2
+python -W train.py -params multiatt/default.json -folder /data/vcr/chk/saves -tensorboard_log /data/tensorboard_log/vcr/chk
