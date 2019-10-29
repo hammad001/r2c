@@ -103,8 +103,9 @@ def sample_sequence(model, length, context, num_samples=1, temperature=1, top_k=
     context = context.unsqueeze(0).repeat(num_samples, 1)
     generated = context
     #TODO: added for getting the embedded representation
-    input_vec = model.transformer.wte(context)
-    print(input_vec)
+    # input_vec = model.transformer.wte(context)
+    # print(input_vec)
+    input_vec = context
     generated = None
     # generated.to(device)
     with torch.no_grad():
@@ -133,8 +134,7 @@ def sample_sequence(model, length, context, num_samples=1, temperature=1, top_k=
                 generated = torch.cat((generated, next_token.unsqueeze(0)), dim=1)
     return generated
 
-
-def main():
+def get_gpt2():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model_type", default="gpt2", type=str,
                         help="Model type selected in the list: " + ", ".join(MODEL_CLASSES.keys()))
@@ -168,6 +168,10 @@ def main():
     tokenizer = tokenizer_class.from_pretrained(args.model_name_or_path)
     model = model_class.from_pretrained(args.model_name_or_path)
     model.to(args.device)
+    return model, args
+
+def generate_rationale(gpt2_inp, model, args):
+    
     model.eval()
 
     if args.length < 0 and model.config.max_position_embeddings > 0:
@@ -182,56 +186,56 @@ def main():
         if args.temperature > 0.7:
             logger.info('CTRL typically works better with lower temperatures (and lower top_k).')
 
-    while True:
-        xlm_lang = None
-        # XLM Language usage detailed in the issues #1414
-        if args.model_type in ["xlm"] and hasattr(tokenizer, 'lang2id') and hasattr(model.config, 'use_lang_emb') \
-                and model.config.use_lang_emb:
-            if args.xlm_lang:
-                language = args.xlm_lang
-            else:
-                language = None
-                while language not in tokenizer.lang2id.keys():
-                    language = input("Using XLM. Select language in " + str(list(tokenizer.lang2id.keys())) + " >>> ")
-            xlm_lang = tokenizer.lang2id[language]
-
-        # XLM masked-language modeling (MLM) models need masked token (see details in sample_sequence)
-        is_xlm_mlm = args.model_type in ["xlm"] and 'mlm' in args.model_name_or_path
-        if is_xlm_mlm:
-            xlm_mask_token = tokenizer.mask_token_id
+    # while True:
+    xlm_lang = None
+    # XLM Language usage detailed in the issues #1414
+    if args.model_type in ["xlm"] and hasattr(tokenizer, 'lang2id') and hasattr(model.config, 'use_lang_emb') \
+            and model.config.use_lang_emb:
+        if args.xlm_lang:
+            language = args.xlm_lang
         else:
-            xlm_mask_token = None
+            language = None
+            while language not in tokenizer.lang2id.keys():
+                language = input("Using XLM. Select language in " + str(list(tokenizer.lang2id.keys())) + " >>> ")
+        xlm_lang = tokenizer.lang2id[language]
 
-        raw_text = args.prompt if args.prompt else input("Model prompt >>> ")
-        if args.model_type in ["transfo-xl", "xlnet"]:
-            # Models with memory likes to have a long prompt for short inputs.
-            raw_text = (args.padding_text if args.padding_text else PADDING_TEXT) + raw_text
-        context_tokens = tokenizer.encode(raw_text)
-        if args.model_type == "ctrl":
-            if not any(context_tokens[0] == x for x in tokenizer.control_codes.values()):
-                logger.info("WARNING! You are not starting your generation from a control code so you won't get good results")
-        out = sample_sequence(
-            model=model,
-            context=context_tokens,
-            length=args.length,
-            temperature=args.temperature,
-            top_k=args.top_k,
-            top_p=args.top_p,
-            repetition_penalty=args.repetition_penalty,
-            is_xlnet=bool(args.model_type == "xlnet"),
-            is_xlm_mlm=is_xlm_mlm,
-            xlm_mask_token=xlm_mask_token,
-            xlm_lang=xlm_lang,
-            device=args.device,
-        )
-        out = out[0].tolist() #TODO changed from out[0, len(context_tokens):].tolist()
+    # XLM masked-language modeling (MLM) models need masked token (see details in sample_sequence)
+    is_xlm_mlm = args.model_type in ["xlm"] and 'mlm' in args.model_name_or_path
+    if is_xlm_mlm:
+        xlm_mask_token = tokenizer.mask_token_id
+    else:
+        xlm_mask_token = None
 
-        text = tokenizer.decode(out, clean_up_tokenization_spaces=True, skip_special_tokens=True)
-        text = text[: text.find(args.stop_token) if args.stop_token else None]
+    # raw_text = args.prompt if args.prompt else input("Model prompt >>> ")
+    # if args.model_type in ["transfo-xl", "xlnet"]:
+    #     # Models with memory likes to have a long prompt for short inputs.
+    #     raw_text = (args.padding_text if args.padding_text else PADDING_TEXT) + raw_text
+    # context_tokens = tokenizer.encode(raw_text)
+    # if args.model_type == "ctrl":
+    #     if not any(context_tokens[0] == x for x in tokenizer.control_codes.values()):
+    #         logger.info("WARNING! You are not starting your generation from a control code so you won't get good results")
+    out = sample_sequence(
+        model=model,
+        context=gpt2_inp,
+        length=args.length,
+        temperature=args.temperature,
+        top_k=args.top_k,
+        top_p=args.top_p,
+        repetition_penalty=args.repetition_penalty,
+        is_xlnet=bool(args.model_type == "xlnet"),
+        is_xlm_mlm=is_xlm_mlm,
+        xlm_mask_token=xlm_mask_token,
+        xlm_lang=xlm_lang,
+        device=args.device,
+    )
+    out = out[0].tolist() #TODO changed from out[0, len(context_tokens):].tolist()
 
-        print(text)
-        if args.prompt:
-            break
+    text = tokenizer.decode(out, clean_up_tokenization_spaces=True, skip_special_tokens=True)
+    text = text[: text.find(args.stop_token) if args.stop_token else None]
+
+    print("Generated rationale ", text)
+        # if args.prompt:
+        #     break
     return text
 
 

@@ -15,6 +15,7 @@ from allennlp.modules.matrix_attention import BilinearMatrixAttention
 from utils.detector import SimpleDetector
 from allennlp.nn.util import masked_softmax, weighted_sum, replace_masked_values
 from allennlp.nn import InitializerApplicator
+from gpt2_rationale import get_gpt2, generate_rationale
 
 @Model.register("MultiHopAttentionQA")
 class AttentionQA(Model):
@@ -71,6 +72,7 @@ class AttentionQA(Model):
             torch.nn.Linear(hidden_dim_maxpool, 1),
         )
         self.gpt2_embed_dim = 768
+        self.gpt2, self.gpt2_args = get_gpt2()
         self.embed = torch.nn.Linear(reasoning_encoder.get_output_dim(), self.gpt2_embed_dim)
 
         self._accuracy = CategoricalAccuracy()
@@ -213,7 +215,7 @@ class AttentionQA(Model):
 
         reason_rep = torch.einsum('bnad,bn->bad', (reasoning_output, class_probabilities))
         gpt2_inp = self.embed(reason_rep)
-
+        generate_rationale(gpt2_inp, self.gpt2, self.gpt2_args)
 
         output_dict = {"label_logits": logits, "label_probs": class_probabilities,
                        'cnn_regularization_loss': obj_reps['cnn_regularization_loss'],
