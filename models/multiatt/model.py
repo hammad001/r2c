@@ -214,8 +214,6 @@ class AttentionQA(Model):
         reason_rep = torch.einsum('bnad,bn->bad', (reasoning_output, class_probabilities))
         gpt2_inp = self.embed(reason_rep)
 
-        import pdb
-        pdb.set_trace()
 
         output_dict = {"label_logits": logits, "label_probs": class_probabilities,
                        'cnn_regularization_loss': obj_reps['cnn_regularization_loss'],
