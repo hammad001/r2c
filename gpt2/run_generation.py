@@ -103,9 +103,8 @@ def sample_sequence(model, length, context, num_samples=1, temperature=1, top_k=
     context = context.unsqueeze(0).repeat(num_samples, 1)
     generated = context
     #TODO: added for getting the embedded representation
-    wte = nn.Embedding(model.config.vocab_size, model.config.n_embd)
-    wte.to(device)
-    input_vec = wte(context)
+    input_vec = model.transformer.wte(context)
+    print(input_vec)
     generated = None
     # generated.to(device)
     with torch.no_grad():
@@ -125,6 +124,9 @@ def sample_sequence(model, length, context, num_samples=1, temperature=1, top_k=
                 next_token = torch.argmax(filtered_logits).unsqueeze(0)
             else:
                 next_token = torch.multinomial(F.softmax(filtered_logits, dim=-1), num_samples=1)
+
+            input_vec = torch.cat((input_vec, model.transformer.wte(next_token.unsqueeze(0))), dim=1)
+
             if generated is None:
                 generated = next_token.unsqueeze(0)
             else:
@@ -222,7 +224,7 @@ def main():
             xlm_lang=xlm_lang,
             device=args.device,
         )
-        out = out[0, len(context_tokens):].tolist()
+        out = out[0].tolist() #TODO changed from out[0, len(context_tokens):].tolist()
 
         text = tokenizer.decode(out, clean_up_tokenization_spaces=True, skip_special_tokens=True)
         text = text[: text.find(args.stop_token) if args.stop_token else None]

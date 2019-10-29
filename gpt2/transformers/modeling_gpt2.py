@@ -357,6 +357,9 @@ class GPT2Model(GPT2PreTrainedModel):
 
         self.init_weights()
 
+    def get_wte(self):
+        return self.wte
+        
     def _resize_token_embeddings(self, new_num_tokens):
         self.wte = self._get_resized_embeddings(self.wte, new_num_tokens)
         return self.wte
